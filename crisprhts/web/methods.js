@@ -2,6 +2,21 @@
    method-specific results, pathway enrichment for pooled and arrayed results. Extends app.js and arrayed.js. */
 (() => {
   let METHOD = "mageck";
+  const bfCut = () => { const e = $("#bfCut"); const v = e ? +e.value : NaN; return isFinite(v) ? v : (R && R.cutoff) || 5; };
+  // recall and precision against the reference gene sets: the same definition the server reports at its own cut-off
+  const bfSummary = (cutoff, I) => {
+    let calls = 0, ess = 0, non = 0, totalEss = 0;
+    for (const r of R.rows) {
+      const ref = r[I.reference];
+      if (ref === "essential") totalEss++;
+      if (r[I.bf] > cutoff) {
+        calls++;
+        if (ref === "essential") ess++;
+        else if (ref === "non-essential") non++;
+      }
+    }
+    return { calls, recall: totalEss ? ess / totalEss : null, precision: ess + non ? ess / (ess + non) : null };
+  };
   cut = function () { const e = $("#fdrCut"); const v = e ? +e.value : 0.05; return v > 0 && v < 1 ? v : 0.05; };
 
   /* ---------------- data page: guide positions */
@@ -72,23 +87,26 @@
     const I = R.idx = Object.fromEntries(R.columns.map((c, i) => [c, i]));
     const col = colorsOf();
     if (R.method === "bagel") {
-      const sm = R.summary;
-      $("#resTiles").innerHTML = [["Essential genes", sm.calls.toLocaleString(), `Bayes factor > ${sm.cutoff}`],
-        ["Recall at BF > " + sm.cutoff, (sm.recall * 100).toFixed(1) + "%", "of reference essential genes (CEG)"],
-        ["Precision at BF > " + sm.cutoff, sm.precision === null ? "–" : (sm.precision * 100).toFixed(1) + "%", "essential vs non-essential reference genes"],
+      const bf = bfCut();
+      const sm = bfSummary(bf, I);
+      $("#resTiles").innerHTML = [["Essential genes", sm.calls.toLocaleString(), `Bayes factor > ${bf}`],
+        ["Recall at BF > " + bf, sm.recall === null ? "–" : (sm.recall * 100).toFixed(1) + "%", "of reference essential genes (CEG)"],
+        ["Precision at BF > " + bf, sm.precision === null ? "–" : (sm.precision * 100).toFixed(1) + "%", "essential vs non-essential reference genes"],
         ["Genes scored", R.rows.length.toLocaleString(), `${R.species} reference sets · 10-fold cross-validation`]].map(tile).join("");
       const pts = R.rows.map((r) => ({ x: r[I.rank], y: r[I.bf], k: r[I.reference] === "essential" ? "ess" : r[I.reference] === "non-essential" ? "non" : "ns", label: r[0], r }));
       const bfs = pts.map((p) => p.y).sort((a, b) => a - b), lo = bfs[Math.floor(bfs.length * 0.005)];
       const nOut = bfs.filter((v) => v < lo).length;
-      $("#volcano").closest(".card").querySelector(".row .faint").textContent = nOut ? `${nOut} genes below ${fmt(lo)} not shown` : "";
-      C.scatter($("#volcano"), pts, { colors: col, xl: "gene rank", yl: "Bayes factor", hline: R.cutoff, height: 340, yr: [lo, bfs[bfs.length - 1]], z: (p) => (p.k === "ns" ? 0 : 1), selected: selGene,
+      $("#volcano").closest(".card").querySelector(".row .faint").innerHTML =
+        `essential at BF &gt; <input type="text" id="bfCut" value="${bf}" size="4">${nOut ? ` · ${nOut} genes below ${fmt(lo)} not shown` : ""}`;
+      $("#bfCut").onchange = () => renderResults();
+      C.scatter($("#volcano"), pts, { colors: col, xl: "gene rank", yl: "Bayes factor", hline: bf, height: 340, yr: [lo, bfs[bfs.length - 1]], z: (p) => (p.k === "ns" ? 0 : 1), selected: selGene,
         labels: pts.slice(0, 8), tip: (p) => `<b>${esc(p.label)}</b><br>BF ${fmt(p.y)} · rank ${p.x}${p.r[I.reference] ? "<br>reference: " + p.r[I.reference] : ""}`, click: (p) => showGene(p.label) });
       $("#volcano").insertAdjacentHTML("beforeend", `<div class="legend"><span><i style="background:${col.ess}"></i>reference essential</span><span><i style="background:${col.non}"></i>reference non-essential</span><span><i style="background:${col.ns}"></i>other genes</span></div>`);
       $("#volcano").closest(".card").querySelector("h3").textContent = "Bayes factors";
       $("#rankplot").closest(".card").querySelector("h3").textContent = "Precision–recall";
       $("#rankDir").classList.add("hidden");
       C.lines($("#rankplot"), [{ name: "BAGEL2", x: R.pr.recall, y: R.pr.precision, color: C.css("--accent") }], { xl: "recall", yl: "precision" });
-      $("#resNotes").innerHTML = `<b>${esc(R.name)}</b> · BAGEL2 Bayes factors · treatment ${R.comparison.treatment.map(esc).join(", ")} vs ${R.comparison.control.map(esc).join(", ")} · ${esc(R.settings.norm)} · run ${esc(R.when)}`;
+      $("#resNotes").innerHTML = `<b>${esc(R.name)}</b> · BAGEL2 Bayes factors · essential at BF &gt; ${bf}${bf !== R.cutoff ? ` (the confirmed default is ${R.cutoff}, which exports use)` : ""} · treatment ${R.comparison.treatment.map(esc).join(", ")} vs ${R.comparison.control.map(esc).join(", ")} · ${esc(R.settings.norm)} · run ${esc(R.when)}`;
       if (R.cn) $("#resNotes").insertAdjacentHTML("beforeend", `<br>Copy-number correction: ${R.cn.n_positioned.toLocaleString()} guides with positions, ${R.cn.segments} segments, ${R.cn.shifted_guides.toLocaleString()} guides shifted by more than 0.25.`);
       sortCol = "rank"; sortAsc = true;
     } else {

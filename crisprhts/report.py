@@ -286,7 +286,8 @@ METHODS_POOLED = [
     "<b>BAGEL2 Bayes factors.</b> Counts + 5, scaled to 10 million reads; log2 fold change against the summed "
     "controls; 10-fold cross-validated kernel-density log-likelihood ratio between reference essential (CEGv2) and "
     "non-essential (NEGv1) genes; a gene's BF is the sum over its guides and replicates (Kim &amp; Hart, Genome "
-    "Medicine 2021).",
+    "Medicine 2021). A gene is called essential at BF &gt; 5, the value BAGEL2's tutorial uses, confirmed for this "
+    "tool on 7 November 2026.",
     "<b>drugZ.</b> Paired replicate fold changes of treated vs untreated, guide z-scores from an empirical-Bayes "
     "standard deviation in a sliding window of 1,000 guides, gene normZ, normal p-values and FDR in both directions "
     "(Colic et al., Genome Medicine 2019).",

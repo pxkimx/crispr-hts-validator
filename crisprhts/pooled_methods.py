@@ -13,6 +13,10 @@ METHODS = {
     "drugz": "drugZ: treated vs untreated at the same time point; finds genes whose loss sensitises (synthetic "
              "lethal) or protects (suppressor). Replicates are paired in the order listed.",
 }
+# Confirmed by the user on 2026-11-07, the value BAGEL2's own tutorial uses. On HAP1 TKOv3 T18 it calls 1,796
+# genes at 94.0% recall with no false positives among the reference sets; it also holds 98% precision on the weak
+# T3 timepoint, where BF > 1 would let 55 non-essential genes through. The results page can show any cut-off; this
+# is the default and the one exports use.
 BF_CUTOFF = 5.0
 
 

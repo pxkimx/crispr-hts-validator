@@ -104,6 +104,26 @@ def test_the_confirmed_defaults():
     assert arrayed_stats.DEFAULT_NORM == "robust_z" and "robust_z" in arrayed_stats.NORM
 
 
+def test_the_confirmed_method_defaults():
+    """BF > 5 and the copy-number settings, confirmed by the user on 2026-11-07."""
+    import inspect
+
+    from crisprhts import cnv, pooled_methods
+    assert pooled_methods.BF_CUTOFF == 5.0
+    sig = inspect.signature(cnv.correct).parameters
+    assert sig["min_genes"].default == 3 and sig["min_size"].default == 10 and sig["alpha"].default == 0.01
+
+
+def test_copy_number_correction_is_off_unless_asked_for():
+    """Loading guide positions must not silently change the fold changes."""
+    P = session.Project()
+    P.load_example("tkov3")
+    assert P.positions is not None, "the tkov3 example carries a positions file"
+    j = P.run_analysis({"method": "mageck", "comparisons": ["BATCH1_HAP1_T3"]})
+    _wait(P, j)
+    assert P.results["BATCH1_HAP1_T3"]["result"].get("cn") is None
+
+
 def test_preferences_are_not_written_to_the_real_home_during_tests():
     assert os.environ.get("CH_PREFS")                      # conftest points it away
     assert "Application Support/CRISPR HTS Validator/preferences.json" not in str(prefs.path())

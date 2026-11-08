@@ -93,6 +93,16 @@ Change any of them under *Thresholds* on the Quality page (pooled and arrayed ea
 `~/Library/Application Support/CRISPR HTS Validator/preferences.json` (that file holds nothing else, and
 *Restore defaults* removes it). Set `CH_PREFS` to use a different file.
 
+### Confirmed method defaults
+
+- **BAGEL2**: a gene is essential at **BF > 5** (BAGEL2's own tutorial value). On HAP1 TKOv3 T18 that is 1,796 genes,
+  94.0% recall, no false positives; on the too-early T3 timepoint it still holds 98% precision, where BF > 1 would
+  admit 55 non-essential genes. The results page accepts any cut-off for the view; exports use 5.
+- **Copy-number correction**: **off unless asked for**, and segments must cover at least **3 genes and 10 guides**
+  (CRISPRcleanR's defaults, so results stay comparable). At those settings it removes planted amplicons of 6-81
+  genes to within about 12%, but on the near-diploid HAP1 line it also flattens clusters of neighbouring essential
+  genes and the essential-gene AUC falls from 0.998 to 0.994 - hence off by default, for cancer lines.
+
 ## Tests and validation
 
 ```bash

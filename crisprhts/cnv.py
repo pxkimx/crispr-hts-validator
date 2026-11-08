@@ -93,6 +93,11 @@ def segment(x: np.ndarray, alpha: float = 0.01, nperm: int = 200, min_size: int 
 
 def correct(lfc: np.ndarray, guides, genes, positions: pd.DataFrame, min_genes: int = 3, alpha: float = 0.01,
             min_size: int = 10, progress=None) -> dict:
+    """Copy-number correction, CRISPRcleanR-style. min_genes=3 / min_size=10 are CRISPRcleanR's own defaults,
+    confirmed by the user on 2026-11-07 so results stay comparable with that tool; at those settings it removes
+    planted amplicons of 6-81 genes to within about 12%. It stays OFF unless asked for, also confirmed: on the
+    near-diploid HAP1 line it flattens clusters of neighbouring essential genes along with the artefact and the
+    essential-gene AUC falls from 0.998 to 0.994, so it is meant for cancer lines with real amplifications."""
     """CRISPRcleanR-style correction of guide fold changes. Guides without a position are left as they are.
     Returns corrected LFC, the per-guide correction (segment mean subtracted) and the segments."""
     lfc = np.asarray(lfc, dtype=float)
