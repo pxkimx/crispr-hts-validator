@@ -181,11 +181,11 @@ window.A = (() => {
   /* ---------------- analyse */
   function renderAnalyse() {
     if (!AS) return;
-    $("#aNorm").innerHTML = Object.entries(AS.norm_methods).map(([k, v]) => `<label><input type="radio" name="anorm" value="${k}" ${k === "robust_z" ? "checked" : ""}> <b>${esc(v.split(":")[0])}</b><span class="desc">${esc(v.split(":").slice(1).join(":").trim())}</span></label>`).join("");
+    $("#aNorm").innerHTML = Object.entries(AS.norm_methods).map(([k, v]) => `<label><input type="radio" name="anorm" value="${k}" ${k === (AS.default_norm || "robust_z") ? "checked" : ""}> <b>${esc(v.split(":")[0])}</b><span class="desc">${esc(v.split(":").slice(1).join(":").trim())}</span></label>`).join("");
     $("#aDirNote").textContent = AS.screen ? `Hits are wells with ${AS.direction === "lower" ? "lower" : AS.direction === "higher" ? "higher" : "lower or higher"} signal than the plate's samples (set on the Plate map page). Scores are oriented so that a hit scores high.` : "Load a screen first.";
   }
   $("#aRunBtn").onclick = async () => {
-    const o = { method: ($("input[name=anorm]:checked") || {}).value || "robust_z", log2: $("#aLog").checked, use_flagged: $("#aFlagged").checked,
+    const o = { method: ($("input[name=anorm]:checked") || {}).value || AS.default_norm || "robust_z", log2: $("#aLog").checked, use_flagged: $("#aFlagged").checked,
       score: $("#aScore").value, summary: $("#aSumm").value, threshold: +$("#aThr").value, replicate_min: +$("#aRepMin").value, gene_fraction: +$("#aGeneFr").value };
     try { const j = await api("/api/a/analyse", o); watchJob(j.id, async () => { AR = null; resPlate = null; AS = await api("/api/a/state"); toast("Analysis finished."); go("results"); }); }
     catch (e) { toast(e.message, true); }

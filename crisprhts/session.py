@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import __version__, cnv, count, enrichment, pooled_io, pooled_methods, pooled_stats, qc
+from . import __version__, cnv, count, enrichment, pooled_io, pooled_methods, pooled_stats, prefs, qc
 
 HOME = Path.home() / "Library" / "Application Support" / "CRISPR HTS Validator"
 UPLOADS_ROOT = HOME / "uploads"
@@ -117,7 +117,7 @@ class Project:
         self.settings: dict = {}
         self.name = ""
         self.jobs: dict[str, Job] = {}
-        self.thresholds: dict = {}
+        self.thresholds: dict = prefs.get("pooled_thresholds", qc.THRESHOLDS)   # the user's own, kept between sessions
         self.screen: dict = {}        # experiment numbers: cells per guide, MOI, selection (see SCREEN_FIELDS)
         self.positions: pd.DataFrame | None = None
         self.positions_name = ""
@@ -356,8 +356,9 @@ class Project:
     def run_qc(self, thresholds: dict | None = None) -> dict:
         if not self.table:
             raise ValueError("Load data first.")
-        th = {k: float(v) for k, v in (thresholds or {}).items() if k in qc.THRESHOLDS}
-        self.thresholds.update(th)
+        if thresholds is not None:
+            th = {k: float(v) for k, v in thresholds.items() if k in qc.THRESHOLDS}
+            self.thresholds = prefs.set("pooled_thresholds", th, qc.THRESHOLDS)
 
         def work(job: Job):
             job.message = "Checking samples…"
@@ -370,6 +371,7 @@ class Project:
             r["screen"] = screen
             r["count_info"] = self.count_info
             r["threshold_text"] = qc.threshold_text(self.thresholds)
+            r["threshold_defaults"] = dict(qc.THRESHOLDS)
             self.qc = r
         return self.start("qc", work)
 

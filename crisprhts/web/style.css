@@ -224,3 +224,4 @@ a.btn{text-decoration:none;display:inline-block}
 .repcard b.warn,#screenCalc b.warn{color:var(--warn-ink)}
 .repcard b.fail,#screenCalc b.fail{color:var(--crit-ink)}
 #screenCalc b{font-family:var(--mono)}
+.thgrid input.set{border-color:var(--accent);background:var(--accent-soft)}

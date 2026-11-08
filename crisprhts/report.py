@@ -294,7 +294,8 @@ METHODS_POOLED = [
     "along each chromosome are segmented (binary segmentation, permutation test); segments covering at least three "
     "genes have their mean removed.",
     "<b>Quality checks.</b> Each check reports pass, warn or fail against the thresholds shown in the table, which "
-    "follow published guidance (MAGeCK QC; Hart et al. 2015, 2017; Joung et al. 2017).",
+    "follow published guidance (MAGeCK QC; Hart et al. 2015, 2017; Joung et al. 2017) and were confirmed for this "
+    "tool on 7 November 2026. Any threshold can be changed in the app, and a changed one is marked in this table.",
     "<b>Library representation and MOI.</b> Cells per guide is the number of cells entered for each step divided by "
     "the guides in the library; at least 500\u00d7 is expected at every step, because below that guides are lost by "
     "sampling rather than by selection. The fraction of transduced cells carrying a single guide is the Poisson "

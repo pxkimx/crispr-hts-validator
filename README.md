@@ -80,6 +80,19 @@ Needs macOS 12 or newer and Python 3.9 or newer. The first start makes a private
 matplotlib, reportlab; needs internet once). The app opens at http://localhost:8788 and quits completely when its
 window closes. Eight example screens (pooled and arrayed) open with one click.
 
+## Thresholds
+
+Every pass / warn / fail line is a scientific choice. The defaults follow published guidance and were confirmed on
+7 November 2026: 300/100 reads per guide; 80%/65% mapped; Gini 0.10/0.20 at baseline; 1%/5% zero-count guides in
+the reference; 90/10 skew 10/20; replicate Pearson r 0.60/0.40 (Spearman shown beside it); essential-gene AUC
+0.90/0.80; 500×/200× cells per guide; MOI 0.4/0.6; 4/2 guides per gene; 100/20 non-targeting controls. Arrayed:
+plate median ratio 2/5, Z′ 0.5/0, |SSMD| 3/2, edge 10%/20%, row-and-column share 10%/25%, replicate r 0.70/0.40,
+default normalisation **robust z**, hit when the combined score passes 2 and every replicate passes 1.
+
+Change any of them under *Thresholds* on the Quality page. A changed threshold is remembered in
+`~/Library/Application Support/CRISPR HTS Validator/preferences.json` (that file holds nothing else, and
+*Restore defaults* removes it). Set `CH_PREFS` to use a different file.
+
 ## Tests and validation
 
 ```bash
@@ -96,6 +109,8 @@ window closes. Eight example screens (pooled and arrayed) open with one click.
   with known answers, and against the official BAGEL2 and drugZ outputs (made by `scripts/make_reference_hart.sh`; identical to their printed precision).
 - `tests/test_design_qc.py` — library representation, MOI (against the Poisson distribution), guides per gene,
   non-targeting controls, and Spearman against scipy.
+- `tests/test_prefs.py` — thresholds are remembered, survive a damaged file and a renamed threshold, and can be
+  restored; the confirmed defaults are checked by value.
 - `tests/test_app.py` — the app end to end, and quitting when the window closes.
 
 ## Test data and credits

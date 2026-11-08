@@ -229,6 +229,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(lambda: P.run_count(d))
         if u.path == "/api/design":
             return self._guard(lambda: P.set_design(d))
+        if u.path == "/api/thresholds/reset":
+            def rt():
+                from . import arrayed_stats, prefs, qc
+                if d.get("which") == "arrayed":
+                    prefs.clear("arrayed_thresholds")
+                    return {"thresholds": dict(arrayed_stats.QC_THRESHOLDS)}
+                prefs.clear("pooled_thresholds")
+                P.thresholds = {}
+                return {"thresholds": dict(qc.THRESHOLDS)}
+            return self._guard(rt)
         if u.path == "/api/qc":
             return self._guard(lambda: P.run_qc(d.get("thresholds")))
         if u.path == "/api/analyse":

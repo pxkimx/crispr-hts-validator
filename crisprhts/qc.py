@@ -2,7 +2,12 @@
 
 Thresholds are scientific choices: the defaults below come from published guidance (MAGeCK/MAGeCK-VISPR QC
 recommendations, Hart et al. 2015/2017 for essential-gene separation, Joung et al. 2017 Nat Protoc for library
-skew) and are shown in the app, where the user can change them. They are listed for Paul to confirm.
+skew and representation) and are shown in the app, where they can be changed and are then remembered.
+
+Confirmed by the user on 2026-11-07: read depth 300/100 reads per guide; mapped reads 80%/65%; Gini 0.10/0.20
+at baseline; zero-count guides 1%/5% in the reference; replicate r 0.60/0.40 (Pearson, with Spearman shown
+beside it); representation 500x/200x cells per guide; MOI 0.4/0.6; 4 guides per gene; 100 non-targeting
+controls. The arrayed defaults they confirmed are in arrayed_stats.py.
 """
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ import numpy as np
 DATA = Path(__file__).resolve().parent / "data"
 
 THRESHOLDS = {
-    "coverage_pass": 200.0,    # reads per guide in a sample
+    "coverage_pass": 300.0,    # reads per guide in a sample
     "coverage_fail": 100.0,
     "mapped_pass": 0.80,       # fraction of reads matching a library guide (common screen guidance: 80-90%)
     "mapped_fail": 0.65,

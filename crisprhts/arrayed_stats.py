@@ -48,6 +48,12 @@ QC_THRESHOLDS = {
     "rep_pass": 0.70,            # Pearson r between replicates (normalised sample wells)
     "rep_fail": 0.40,
 }
+DEFAULT_NORM = "robust_z"
+
+# Confirmed by the user on 2026-11-07: robust z stays the default normalisation (per-plate median and MAD), and a
+# well is a hit when its combined score passes 2.0 and every replicate also passes 1.0. On the cellHTS2 KcViab
+# screen that gives 668 hits, against 415 for the classic plate z-score the published 2003 analysis used and 1,411
+# for B-score, which also removes that screen's row and column effects.
 HIT_DEFAULTS = {"score": "z", "threshold": 2.0, "replicate_min": 1.0, "summary": "mean", "direction": "lower",
                 "gene_fraction": 0.5}
 

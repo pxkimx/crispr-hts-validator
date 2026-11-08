@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import __version__, arrayed_io, arrayed_stats
+from . import __version__, arrayed_io, arrayed_stats, prefs
 from .session import TEST_DATA, UPLOADS, Project
 
 EXAMPLES = {
@@ -129,7 +129,10 @@ class ArrayedProject:
     def run_qc(self, thresholds=None) -> dict:
         if not self.screen:
             raise ValueError("Load a screen first.")
-        th = {k: float(v) for k, v in (thresholds or {}).items() if k in arrayed_stats.QC_THRESHOLDS}
+        if thresholds is not None:
+            th = {k: float(v) for k, v in thresholds.items() if k in arrayed_stats.QC_THRESHOLDS}
+            prefs.set("arrayed_thresholds", th, arrayed_stats.QC_THRESHOLDS)
+        th = prefs.get("arrayed_thresholds", arrayed_stats.QC_THRESHOLDS)
 
         def work(job):
             job.message = "Checking plates…"
@@ -176,7 +179,9 @@ class ArrayedProject:
         out = {"examples": {k: {"title": v["title"], "about": v["about"]} for k, v in EXAMPLES.items()},
                "examples_available": TEST_DATA.exists(), "files": sorted(self.files), "name": self.name,
                "norm_methods": arrayed_stats.NORM, "hit_defaults": arrayed_stats.HIT_DEFAULTS,
-               "qc_thresholds": arrayed_stats.QC_THRESHOLDS, "has_qc": self.qc is not None,
+               "default_norm": arrayed_stats.DEFAULT_NORM, "hit_defaults": arrayed_stats.HIT_DEFAULTS,
+               "qc_thresholds": {**arrayed_stats.QC_THRESHOLDS, **prefs.get("arrayed_thresholds", arrayed_stats.QC_THRESHOLDS)},
+               "qc_threshold_defaults": arrayed_stats.QC_THRESHOLDS, "has_qc": self.qc is not None,
                "qc_overall": self.qc["overall"] if self.qc else None, "has_result": self.result is not None,
                "roles": self.roles, "direction": self.direction, "channel": self.channel, "example": self.example}
         if self.screen:
