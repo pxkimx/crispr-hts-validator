@@ -210,3 +210,17 @@ svg .lab{fill:var(--ink2)}
 .pathways .form{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .pathways td.genes{white-space:normal;max-width:420px;font-size:11.5px;color:var(--muted)}
 a.btn{text-decoration:none;display:inline-block}
+
+.screenform{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin-top:4px}
+.screenform label{display:block;font-size:12.5px;color:var(--muted)}
+.screenform label b{display:block;color:var(--fg);font-weight:600;font-size:13px;margin-bottom:3px}
+.screenform input{width:100%;margin-top:5px}
+.screenform .hint{display:block;margin-top:4px;font-size:11.5px;color:var(--faint)}
+.repcard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.repcard .stat{border:1px solid var(--line2);border-radius:12px;padding:10px 12px}
+.repcard .stat b{display:block;font-size:19px;font-family:var(--mono);letter-spacing:-.5px}
+.repcard .stat span{font-size:11.5px;color:var(--muted)}
+.repcard b.pass,#screenCalc b.pass{color:var(--good-ink)}
+.repcard b.warn,#screenCalc b.warn{color:var(--warn-ink)}
+.repcard b.fail,#screenCalc b.fail{color:var(--crit-ink)}
+#screenCalc b{font-family:var(--mono)}

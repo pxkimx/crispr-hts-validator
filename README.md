@@ -24,6 +24,19 @@ Project page: https://paul-h-kim.com/software/crispr-hts-validator
 - **Results**: volcano and rank plots, searchable gene table, per-gene view with every guide, export to CSV,
   MAGeCK-format text, or Excel.
 
+## Screen design checks (version 1.1)
+
+The checks that no amount of sequencing can replace, from the numbers you enter on the Samples page:
+
+- **Library representation**: cells carrying each guide after selection, at the tightest passage and at harvest
+  (at least 500× at every step; below that, guides are lost by sampling, which looks exactly like a real dropout).
+- **MOI**: with the Poisson fraction of transduced cells that carry a single guide (about 86% at MOI 0.3).
+- **Guides per gene**: the distribution, and the genes with fewer than four independent guides.
+- **Non-targeting controls**: how many are in the library, whether they sit at a log₂ fold change of zero (a shift
+  means the normalisation moved, not the cells), and the noise floor their spread sets — the smallest gene effect
+  that can be told apart from no effect.
+- **Spearman** rank correlation beside Pearson for replicate agreement, so a few huge fold changes cannot carry it.
+
 ## More scoring, copy number, pathways, PDF
 
 - **BAGEL2 Bayes factors** for essentiality, ported from the Hart lab's BAGEL.py (10-fold cross-validation, same
@@ -81,6 +94,8 @@ window closes. Eight example screens (pooled and arrayed) open with one click.
   calls on synthetic plates, and agreement with the published KcViab scores (cellHTS2 `Analysis2003.txt`).
 - `tests/test_methods03.py` — BAGEL2, drugZ, copy-number correction, enrichment and the PDF report on synthetic data
   with known answers, and against the official BAGEL2 and drugZ outputs (made by `scripts/make_reference_hart.sh`; identical to their printed precision).
+- `tests/test_design_qc.py` — library representation, MOI (against the Poisson distribution), guides per gene,
+  non-targeting controls, and Spearman against scipy.
 - `tests/test_app.py` — the app end to end, and quitting when the window closes.
 
 ## Test data and credits

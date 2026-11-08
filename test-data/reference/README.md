@@ -74,3 +74,9 @@ same FDR < 0.05 calls. Until the script has been run these tests are skipped.
 
 Data added for 0.3: `hart-bagel/tkov3-example/TKOv3-guide-positions.txt` (TKOv3 guide coordinates from the BAGEL
 repository's CRISPRcleanR example, MIT) for copy-number correction.
+
+## Threshold change in 1.1
+
+The mapped-read default moved from pass ≥ 65% / fail < 50% to **pass ≥ 80% / fail < 65%**, the window usually
+quoted for a pooled screen. It is a display threshold only: no statistic, hit list or reference comparison in these
+tests depends on it, and every threshold is editable in the app under *Thresholds*.

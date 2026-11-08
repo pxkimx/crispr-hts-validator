@@ -245,6 +245,11 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
       <div id="compList"></div>
     </div>
   </div>
+  <div class="card mt" id="screenCard">
+    <div class="row"><h2>Screen design</h2><span class="muted small">optional — these are experiment numbers, not read counts: no amount of sequencing recovers a guide that was carried by too few cells</span></div>
+    <div class="screenform" id="screenForm"></div>
+    <div class="row small mt" id="screenCalc"></div>
+  </div>
   <div class="row mt"><span class="spacer"></span><span class="muted small" id="designMsg"></span><button class="btn primary" id="saveDesign">Save and check quality →</button></div>
 </section>
 

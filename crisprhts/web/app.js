@@ -3,6 +3,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const { fmt, esc } = C;
 let S = null;            // server state summary
+let scr = {};            // screen design numbers (cells per guide, MOI, selection)
 let QC = null;           // last quality-check result
 let R = null;            // current result
 let design = null;       // editable copy of the design
@@ -228,6 +229,34 @@ function renderSamples() {
   $$("[data-cond]").forEach((i) => (i.oninput = () => { design.samples[+i.dataset.cond].condition = i.value; renumber(); }));
   $$("[data-ref]").forEach((i) => (i.onchange = () => (design.samples[+i.dataset.ref].reference = i.checked)));
   renderComps();
+  renderScreen();
+}
+function renderScreen() {
+  const F = (S && S.screen_fields) || {};
+  scr = { ...(S.screen || {}), ...scr };
+  $("#screenForm").innerHTML = Object.entries(F).map(([k, f]) =>
+    `<label><b>${esc(f.label)}</b><input type="text" inputmode="${f.type === "text" ? "text" : "decimal"}" data-sc="${k}" value="${esc(scr[k] == null ? "" : scr[k])}"><span class="hint">${esc(f.hint || "")}</span></label>`).join("");
+  $$("[data-sc]").forEach((i) => (i.oninput = () => {
+    const v = i.value.trim();
+    if (v === "") delete scr[i.dataset.sc]; else scr[i.dataset.sc] = v;
+    screenCalc();
+  }));
+  screenCalc();
+}
+function screenCalc() {
+  const n = (k) => { const v = parseFloat(String(scr[k] == null ? "" : scr[k]).replace(/[, ]/g, "")); return v > 0 ? v : null; };
+  const lib = (S.table && S.table.guides) || 0;
+  const out = [];
+  if (lib) {
+    for (const [k, what] of [["cells_transduced", "after selection"], ["cells_bottleneck", "at the tightest passage"], ["cells_harvested", "at harvest"]]) {
+      const c = n(k);
+      if (c) { const x = c / lib; out.push(`<b class="${x >= 500 ? "pass" : x >= 200 ? "warn" : "fail"}">${fmt(x)}×</b> ${what}`); }
+    }
+  }
+  const m = n("moi");
+  if (m) { const one = 100 * (m * Math.exp(-m)) / (1 - Math.exp(-m)); out.push(`<b class="${m <= 0.4 && m >= 0.05 ? "pass" : m > 0.6 ? "fail" : "warn"}">MOI ${m}</b> — about ${one.toFixed(0)}% of transduced cells carry one guide`); }
+  $("#screenCalc").innerHTML = out.length ? out.join('<span class="faint"> · </span>')
+    : `<span class="muted">Fill these in and the quality check compares them with 500 cells per guide and MOI 0.3.</span>`;
 }
 function renumber() {
   const seen = {};
@@ -256,7 +285,7 @@ $("#addComp").onclick = () => {
   renderComps();
 };
 $("#saveDesign").onclick = async () => {
-  try { const d = await api("/api/design", design); design = d; S.design = d; QC = null; $("#qcDot").className = "dot"; toast("Saved."); go("quality"); runQC(); }
+  try { const d = await api("/api/design", { ...design, screen: scr }); design = d; S.design = d; QC = null; $("#qcDot").className = "dot"; toast("Saved."); go("quality"); runQC(); }
   catch (e) { toast(e.message, true); }
 };
 
@@ -266,6 +295,8 @@ const TH_LABELS = {
   zero_ref_pass: "Zero-count (reference) — pass up to", zero_ref_fail: "Zero-count (reference) — fail above", zero_late_pass: "Zero-count (later) — pass up to", zero_late_fail: "Zero-count (later) — fail above",
   gini_ref_pass: "Gini (reference) — pass up to", gini_ref_fail: "Gini (reference) — fail above", gini_late_pass: "Gini (later) — pass up to", gini_late_fail: "Gini (later) — fail above",
   skew_pass: "90/10 skew — pass up to", skew_fail: "90/10 skew — fail above", rep_r_pass: "Replicate r — pass at", rep_r_fail: "Replicate r — fail below", auc_pass: "Essential AUC — pass at", auc_fail: "Essential AUC — fail below",
+  cells_pass: "Cells per guide — pass at", cells_fail: "Cells per guide — fail below", moi_pass_hi: "MOI — pass up to", moi_fail_hi: "MOI — fail above",
+  guides_gene_pass: "Guides per gene — pass at", guides_gene_fail: "Guides per gene — fail below", ntc_pass: "Control guides — pass at", ntc_fail: "Control guides — fail below",
 };
 $("#thBtn").onclick = () => { $("#thPanel").classList.toggle("hidden"); renderThresholds(); };
 function renderThresholds() {
@@ -305,10 +336,19 @@ async function renderQC() {
     else if (c.id === "zeros") C.bars(P, c.per_sample.map((p) => ({ label: p.sample + (p.reference ? " ●" : ""), value: p.value * 100, status: p.status, tip: `${p.count.toLocaleString()} guides with no reads (${(p.value * 100).toFixed(2)}%)${p.reference ? " — reference sample" : ""}` })), { vf: (v) => fmt(v) + "%" });
     else if (c.id === "gini") C.bars(P, c.per_sample.map((p) => ({ label: p.sample + (p.reference ? " ●" : ""), value: p.value, status: p.status, tip: `MAGeCK Gini (log counts) ${p.value.toFixed(4)} · Gini on raw counts ${p.raw.toFixed(3)}` })), { min: 0, vf: (v) => v.toFixed(3) });
     else if (c.id === "coverage") { if (QC.distributions) C.boxes(P, QC.distributions.samples, QC.distributions.quantiles, refs); }
-    else if (c.id === "replicates" && c.pairs.length) P.innerHTML = `<table class="tbl"><tr><th>Condition</th><th>Replicates</th><th class="num">r (guide LFC)</th><th class="num">r (log counts)</th><th></th></tr>${c.pairs.map((p) => `<tr><td>${esc(p.condition)}</td><td>${esc(p.a)} · ${esc(p.b)}</td><td class="num">${fmt(p.value)}</td><td class="num">${fmt(p.r_counts)}</td><td>${statusTag(p.status)}</td></tr>`).join("")}</table>`;
+    else if (c.id === "replicates" && c.pairs.length) P.innerHTML = `<table class="tbl"><tr><th>Condition</th><th>Replicates</th><th class="num">r (guide LFC)</th><th class="num">ρ (Spearman)</th><th class="num">r (log counts)</th><th></th></tr>${c.pairs.map((p) => `<tr><td>${esc(p.condition)}</td><td>${esc(p.a)} · ${esc(p.b)}</td><td class="num">${fmt(p.value)}</td><td class="num">${fmt(p.spearman)}</td><td class="num">${fmt(p.r_counts)}</td><td>${statusTag(p.status)}</td></tr>`).join("")}</table>`;
     else if (c.id === "pca" && c.pca) C.pca(P, c.pca, condOf, refs);
     else if (c.id === "essentials" && c.per_condition && c.per_condition.length) renderEss(P, c);
+    else if (c.id === "representation") renderRep(P, c);
+    else if (c.id === "guides_gene" && c.hist && c.hist.length) C.bars(P, c.hist.map((h) => ({ label: String(h.n), value: h.genes, status: h.n >= th.guides_gene_pass ? "pass" : h.n >= th.guides_gene_fail ? "warn" : "fail", tip: `${h.genes.toLocaleString()} genes with ${h.n} guide${h.n === 1 ? "" : "s"}` })), { vf: (v) => fmt(v) });
+    else if (c.id === "ntc" && c.per_condition && c.per_condition.length) P.innerHTML = `<table class="tbl"><tr><th>Condition</th><th class="num">Median LFC, controls</th><th class="num">Spread (robust SD)</th><th class="num">Median LFC, targeting</th><th class="num">Smallest effect above noise</th><th></th></tr>${c.per_condition.map((p) => `<tr><td>${esc(p.condition)}</td><td class="num">${fmt(p.median)}</td><td class="num">${fmt(p.sd)}</td><td class="num">${fmt(p.median_targeting)}</td><td class="num">±${fmt(p.floor)}</td><td>${statusTag(p.status)}</td></tr>`).join("")}</table>`;
   }
+}
+function renderRep(P, c) {
+  if (!c.rows.length && !c.moi) { P.innerHTML = ""; return; }
+  const cells = c.rows.map((r) => `<div class="stat"><b class="${r.status}">${fmt(r.per_guide)}×</b><span>${esc(r.step)}<br>${fmt(r.cells)} cells</span></div>`).join("");
+  const moi = c.moi ? `<div class="stat"><b class="${c.moi.status}">${c.moi.moi}</b><span>MOI<br>about ${c.moi.one_guide.toFixed(0)}% carry one guide</span></div>` : "";
+  P.innerHTML = `<div class="repcard">${cells}${moi}</div><div class="small muted mt">Cells per guide = cells ÷ ${fmt(c.library_guides)} guides in the library.</div>`;
 }
 function renderEss(P, c) {
   P.innerHTML = `<div class="row small muted">${c.n_ceg} core-essential (CEGv2) and ${c.n_neg} non-essential (NEGv1) genes are in this library. Gene LFC = mean of its guides, replicates averaged, against the reference.</div>
@@ -475,6 +515,8 @@ function renderMethods() {
   <div class="card"><h3>Guide test (MAGeCK-style)</h3><p>Control and treatment means are the medians of normalised replicate counts. Variance comes from a mean–variance model, log₂(var − mean + 1) = k·log₂(mean + 1) + b, fitted on the control replicates (all samples when there is one control). The p-value for depletion or enrichment uses a normal distribution truncated at zero, as MAGeCK 0.5.9.5 ships; guide scores are the normal quantiles of the depletion p-value. Guide LFC = log₂(treatment + 1) − log₂(control + 1).</p></div>
   <div class="card"><h3>Gene test (α-RRA)</h3><p>Guides are ranked by score; each gene takes the smallest beta-distribution probability of its top guides that fall under α (α = fraction of guides with p ≤ 0.25, kept between 0.05 and 0.5 for depletion). Gene p-values come from scoring random guide sets of the same size (≥ 100,000 draws, using MAGeCK's own random-number generator and seed, so results are reproducible); FDR by Benjamini–Hochberg. Gene LFC = median of its guides.</p></div>
   <div class="card"><h3>Quality checks — defaults (to confirm)</h3><ul>${thList}</ul><p class="small muted">Essential genes: CEGv2 (684) and non-essential NEGv1 (927) human gene lists from the Hart lab BAGEL repository (MIT licence).</p></div>
+  <div class="card"><h3>Screen design: representation and MOI</h3><p>Cells per guide = the cells you enter for each step ÷ the guides in the library. At least 500 cells per guide is expected at every step (transduction, the tightest passage, harvest): below that, guides disappear because too few cells carried them, which looks exactly like a real dropout afterwards and cannot be fixed by sequencing more deeply. MOI about 0.3 keeps one guide per cell; the app shows the Poisson fraction of transduced cells carrying exactly one guide, so you can see what a higher MOI costs. These are the numbers you enter on the Samples page — the app cannot read them from the counts (to confirm: 500× pass, 200× fail; MOI 0.4 pass, 0.6 fail).</p></div>
+  <div class="card"><h3>Guides per gene and non-targeting controls</h3><p>Guides per gene is counted over targeting guides only; genes with fewer than four are listed, because a gene score built on one or two guides cannot tell a real effect from one bad guide. Non-targeting controls are found by name (non-targeting, NTC, safe-harbour, EGFP, LacZ, luciferase, AAVS1, or your own pattern). They should sit at a log₂ fold change of zero: a shift means the whole library moved, which is a normalisation problem rather than biology. Their robust spread (IQR ÷ 1.349) is the noise floor, reported as the smallest gene effect that can be told apart from no effect.</p></div>
   <div class="card"><h3>BAGEL2 Bayes factors</h3><p>Ported from BAGEL.py (Kim &amp; Hart 2021, MIT): counts + 5 scaled to 10 million reads, log₂ fold change against the summed controls; in 10-fold cross-validation over genes, kernel densities of guide fold changes of reference essential (CEGv2) and non-essential (NEGv1) genes give a log-likelihood ratio, fitted by a straight line that scores the held-out genes; a gene's Bayes factor is the sum over its guides and replicates. BF &gt; 5 is shown as essential (to confirm). Mouse screens use the Hart lab mouse CEG/NEG lists.</p></div>
   <div class="card"><h3>drugZ</h3><p>Ported from drugz.py (Colic et al. 2019, MIT): treated vs untreated fold changes per replicate pair (or of the means, unpaired), guide z-scores from a standard deviation estimated in a sliding window of 1,000 guides sorted by control reads and never allowed to decrease, gene normZ = z-scored sum of guide z over √observations; p-values and FDR for synthetic sick/lethal (negative) and suppressor (positive) genes.</p></div>
   <div class="card"><h3>Copy-number correction</h3><p>After CRISPRcleanR (Iorio et al. 2018), without copy-number data: guide fold changes ordered along each chromosome are segmented (binary segmentation, permutation test, α = 0.01, segments of ≥ 10 guides); segments covering ≥ 3 genes have their mean removed (for MAGeCK, the treatment counts are rescaled accordingly). On HAP1 TKOv3 it removes planted amplicons of 6–81 genes to within ±12%, but also shifts clusters of neighbouring essential genes (essential-gene AUC 0.998 → 0.994), so it is off by default and meant for cancer lines with copy-number changes.</p></div>

@@ -16,8 +16,8 @@ DATA = Path(__file__).resolve().parent / "data"
 THRESHOLDS = {
     "coverage_pass": 200.0,    # reads per guide in a sample
     "coverage_fail": 100.0,
-    "mapped_pass": 0.65,       # fraction of reads matching a library guide (MAGeCK QC guideline)
-    "mapped_fail": 0.50,
+    "mapped_pass": 0.80,       # fraction of reads matching a library guide (common screen guidance: 80-90%)
+    "mapped_fail": 0.65,
     "zero_ref_pass": 0.01,     # fraction of zero-count guides in reference (plasmid / T0) samples
     "zero_ref_fail": 0.05,
     "zero_late_pass": 0.05,    # ... in later samples, where essential-gene guides are expected to drop out
@@ -32,6 +32,16 @@ THRESHOLDS = {
     "rep_r_fail": 0.40,
     "auc_pass": 0.90,          # essential (CEGv2) vs non-essential (NEGv1) separation
     "auc_fail": 0.80,
+    "cells_pass": 500.0,       # cells carrying each guide at the tightest point of the experiment
+    "cells_fail": 200.0,
+    "moi_pass_hi": 0.4,        # multiplicity of infection: one guide per cell
+    "moi_fail_hi": 0.6,
+    "moi_low": 0.05,           # below this, most cells are untransduced (wasteful, not wrong)
+    "guides_gene_pass": 4.0,   # independent guides per gene
+    "guides_gene_fail": 2.0,
+    "ntc_pass": 100.0,         # non-targeting control guides in the library
+    "ntc_fail": 20.0,
+    "ntc_shift": 0.25,         # |median LFC| of the non-targeting guides: they should sit at zero
 }
 
 THRESHOLD_TEXT = {
@@ -42,6 +52,9 @@ THRESHOLD_TEXT = {
     "skew": "Library evenness (90th/10th percentile of reference counts): pass ≤ {skew_pass:g}, fail > {skew_fail:g} (Joung et al. 2017).",
     "rep": "Replicate agreement (Pearson r of guide log fold changes): pass ≥ {rep_r_pass:g}, fail < {rep_r_fail:g}.",
     "auc": "Essential vs non-essential separation (ROC AUC, CEGv2 vs NEGv1): pass ≥ {auc_pass:g}, warn {auc_fail:g}–{auc_pass:g}, fail < {auc_fail:g}.",
+    "cells": "Library representation: pass ≥ {cells_pass:g} cells per guide at every step, fail < {cells_fail:g}×. MOI: pass ≤ {moi_pass_hi:g}, fail > {moi_fail_hi:g} (one guide per cell).",
+    "guides_gene": "Guides per gene: pass ≥ {guides_gene_pass:g}, fail < {guides_gene_fail:g} (gene-level tests need several independent guides).",
+    "ntc": "Non-targeting controls: pass ≥ {ntc_pass:g} guides, fail < {ntc_fail:g}; their median log₂ fold change should be within ±{ntc_shift:g} of zero.",
 }
 
 
@@ -167,7 +180,7 @@ def guide_lfc_matrix(counts: np.ndarray, samples: list[str], ref_samples: list[s
 
 def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: list[str], design: dict,
            reads: dict | None = None, mapped: dict | None = None, thresholds: dict | None = None,
-           species: str = "auto") -> dict:
+           species: str = "auto", screen: dict | None = None, control_mask=None) -> dict:
     """All pooled-screen checks. `design` = {"samples": [{sample, condition, reference, replicate}], ...}."""
     th = {**THRESHOLDS, **(thresholds or {})}
     X = np.asarray(counts, dtype=float)
@@ -176,6 +189,9 @@ def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: lis
     is_ref = {s: bool(info.get(s, {}).get("reference")) for s in samples}
     refs = [s for s in samples if is_ref[s]]
     checks = []
+
+    # 0 library representation (cells per guide) and MOI -- from the numbers the user enters, not from the reads
+    checks.append(_representation_check(screen or {}, ng, th))
 
     # 1 reads per sample
     tot = {s: float(reads[s]) if reads and s in reads else float(X[:, j].sum()) for j, s in enumerate(samples)}
@@ -260,6 +276,39 @@ def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: lis
                        "why": "No reference (plasmid or T0) sample is marked in the sample sheet.",
                        "rule": threshold_text(th)["skew"]})
 
+    # 5b guides per gene: gene-level tests need several independent guides
+    gene_arr0 = np.asarray(genes, dtype=object).astype(str)
+    ctrl = np.zeros(ng, dtype=bool) if control_mask is None else np.asarray(control_mask, dtype=bool)
+    tgt = ~ctrl
+    if tgt.any():
+        uniq, cnt = np.unique(gene_arr0[tgt], return_counts=True)
+        med = float(np.median(cnt))
+        thin = uniq[cnt < th["guides_gene_pass"]]
+        st = _status(med, th["guides_gene_pass"], th["guides_gene_fail"])
+        frac_thin = float(len(thin)) / max(len(uniq), 1)
+        if st == "pass" and frac_thin > 0.10:
+            st = "warn"
+        hist = [{"n": int(k), "genes": int(v)} for k, v in zip(*np.unique(cnt, return_counts=True))][:24]
+        head = "Median {:g} guides per gene (range {}–{}).".format(med, int(cnt.min()), int(cnt.max()))
+        if not len(thin):
+            why = head + " Every gene is covered by several independent guides."
+        elif st == "pass":
+            why = (head + " {:,} of {:,} genes ({:.1%}) have fewer than {:g} — read those gene calls with care, "
+                   "since one bad or off-target guide carries more weight there.".format(
+                       len(thin), len(uniq), frac_thin, th["guides_gene_pass"]))
+        else:
+            why = (head + " {:,} of {:,} genes ({:.1%}) have fewer than {:g} (e.g. {}). A gene called from one or "
+                   "two guides cannot be told apart from a single bad or off-target guide.".format(
+                       len(thin), len(uniq), frac_thin, th["guides_gene_pass"], ", ".join(sorted(thin)[:4])))
+        checks.append({"id": "guides_gene", "name": "Guides per gene", "status": st, "median": med,
+                       "n_genes": int(len(uniq)), "n_thin": int(len(thin)), "hist": hist,
+                       "examples": sorted(thin)[:20], "min": int(cnt.min()), "max": int(cnt.max()),
+                       "why": why, "rule": threshold_text(th)["guides_gene"]})
+    else:
+        checks.append({"id": "guides_gene", "name": "Guides per gene", "status": "na", "hist": [],
+                       "why": "Every guide in the library is marked as a control.",
+                       "rule": threshold_text(th)["guides_gene"]})
+
     # 6 replicate correlation (guide LFC vs reference)
     conds: dict[str, list[str]] = {}
     for s in samples:
@@ -275,7 +324,9 @@ def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: lis
                 a, b = samples.index(ss[i]), samples.index(ss[j])
                 r_lfc = pearson(lfc[:, a], lfc[:, b]) if lfc is not None else float("nan")
                 r_cnt = pearson(logn[:, a], logn[:, b])
+                rho = spearman(lfc[:, a], lfc[:, b]) if lfc is not None else float("nan")
                 pairs.append({"condition": c, "a": ss[i], "b": ss[j], "value": r_lfc, "r_counts": r_cnt,
+                              "spearman": rho,
                               "status": _status(r_lfc, th["rep_r_pass"], th["rep_r_fail"])})
     if pairs:
         bad = [p for p in pairs if p["status"] != "pass"]
@@ -331,6 +382,54 @@ def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: lis
         st, why = "na", "Needs at least three samples and a condition with replicates."
     checks.append({"id": "pca", "name": "Sample PCA", "status": st, "pca": pca, "why": why,
                    "rule": "Each sample should correlate better (log counts) with its own replicates than with any other condition."})
+
+    # 7b non-targeting controls: the null distribution every gene is judged against
+    n_ntc = int(ctrl.sum())
+    if n_ntc == 0:
+        checks.append({"id": "ntc", "name": "Non-targeting controls", "status": "na", "per_condition": [], "n": 0,
+                       "why": "No control guides were found. Name them on the Analyse page (or in the library) so they "
+                              "can set the null distribution — by default any gene matching non-targeting, NTC, "
+                              "safe-harbour, EGFP, LacZ, luciferase or AAVS1.",
+                       "rule": threshold_text(th)["ntc"]})
+    else:
+        st = _status(float(n_ntc), th["ntc_pass"], th["ntc_fail"])
+        per = []
+        if lfc is not None:
+            for c, ss in conds.items():
+                if all(is_ref[s] for s in ss):
+                    continue
+                cols = [samples.index(s) for s in ss]
+                v = lfc[:, cols].mean(axis=1)
+                cv, tv = v[ctrl], v[tgt]
+                med = float(np.median(cv))
+                sd = float(np.subtract(*np.percentile(cv, [75, 25])) / 1.349) if len(cv) > 3 else float("nan")
+                shifted = abs(med) > th["ntc_shift"]
+                per.append({"condition": c, "median": med, "sd": sd,
+                            "median_targeting": float(np.median(tv)),
+                            "floor": float(2 * sd) if sd == sd else float("nan"),
+                            "status": "warn" if shifted else "pass"})
+            if any(p["status"] != "pass" for p in per):
+                st = _worst([st, "warn"])
+        bad = [p for p in per if p["status"] != "pass"]
+        if st == "fail":
+            why = (f"Only {n_ntc:,} control guides: too few to measure the spread of a gene with no effect, so "
+                   "p-values rest entirely on the targeting guides.")
+        elif n_ntc < th["ntc_pass"]:
+            why = (f"{n_ntc:,} control guides — usable, but {th['ntc_pass']:.0f} or more give a steadier null "
+                   "distribution for the gene test.")
+        elif bad:
+            why = ("Control guides should sit at a log₂ fold change of zero; "
+                   + "; ".join(f"in {p['condition']} their median is {p['median']:+.2f}" for p in bad[:3])
+                   + ". That is a normalisation shift, not biology — the whole library moved.")
+        elif per:
+            why = ("{:,} control guides sit at zero as they should (median {}). Their spread sets the noise floor: "
+                   "a gene effect smaller than about {} is not distinguishable from no effect.".format(
+                       n_ntc, ", ".join(f"{p['median']:+.2f}" for p in per[:3]),
+                       "±{:.2f}".format(np.nanmean([p["floor"] for p in per])) if per else "n/a"))
+        else:
+            why = f"{n_ntc:,} control guides are in the library (needs a reference sample to check how they behave)."
+        checks.append({"id": "ntc", "name": "Non-targeting controls", "status": st, "n": n_ntc,
+                       "per_condition": per, "why": why, "rule": threshold_text(th)["ntc"]})
 
     # 8 essential vs non-essential separation
     ess = None
@@ -392,6 +491,102 @@ def run_qc(counts: np.ndarray, guides: list[str], genes: list[str], samples: lis
 
     overall = _worst(c["status"] for c in checks)
     return {"checks": checks, "overall": overall, "thresholds": th, "distributions": _distributions(X, samples)}
+
+
+def spearman(a, b) -> float:
+    """Rank correlation; robust to the few huge fold changes that dominate a Pearson r."""
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    ok = np.isfinite(a) & np.isfinite(b)
+    if ok.sum() < 3:
+        return float("nan")
+    return pearson(_rank(a[ok]), _rank(b[ok]))
+
+
+def _rank(x) -> np.ndarray:
+    order = np.argsort(x, kind="mergesort")
+    r = np.empty(len(x), dtype=float)
+    r[order] = np.arange(len(x), dtype=float)
+    # average ties, as Spearman requires
+    v = x[order]
+    i = 0
+    while i < len(v):
+        j = i
+        while j + 1 < len(v) and v[j + 1] == v[i]:
+            j += 1
+        if j > i:
+            r[order[i:j + 1]] = (i + j) / 2.0
+        i = j + 1
+    return r
+
+
+def _representation_check(screen: dict, n_guides: int, th: dict) -> dict:
+    """Library representation (cells per guide) and MOI. These are experiment numbers, not read counts:
+    sequencing deeply cannot recover guides that were never in enough cells."""
+    def num(k):
+        try:
+            v = float(screen.get(k) or 0)
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            return None
+    lib = int(num("library_guides") or n_guides)
+    moi = num("moi")
+    steps = [("at transduction", num("cells_transduced")), ("at the tightest passage", num("cells_bottleneck")),
+             ("at harvest", num("cells_harvested"))]
+    given = [(name, c / lib) for name, c in steps if c]
+    rows = [{"step": name, "cells": c, "per_guide": c / lib,
+             "status": _status(c / lib, th["cells_pass"], th["cells_fail"])} for name, c in steps if c]
+    moi_row = None
+    if moi is not None:
+        if moi > th["moi_fail_hi"]:
+            mst = "fail"
+        elif moi > th["moi_pass_hi"] or moi < th["moi_low"]:
+            mst = "warn"
+        else:
+            mst = "pass"
+        moi_row = {"moi": moi, "status": mst,
+                   "one_guide": 100.0 * _single_fraction(moi)}
+    if not rows and moi_row is None:
+        return {"id": "representation", "name": "Library representation and MOI", "status": "na",
+                "rows": [], "moi": None, "library_guides": lib,
+                "why": "Not checked: fill in the screen design on the Samples page (cells transduced, cells carried "
+                       "at the tightest passage, cells harvested, and the MOI). Sequencing cannot recover a guide "
+                       "that was lost because too few cells carried it.",
+                "rule": threshold_text(th)["cells"]}
+    st = _worst([r["status"] for r in rows] + ([moi_row["status"]] if moi_row else []))
+    parts = []
+    worst = [r for r in rows if r["status"] != "pass"]
+    if rows and not worst:
+        parts.append("At least {:g} cells carry each guide throughout ({}).".format(
+            th["cells_pass"], ", ".join("{:,.0f}× {}".format(r["per_guide"], r["step"]) for r in rows)))
+    elif worst:
+        parts.append("Only {} — below {:g} cells per guide, guides are lost by chance rather than by selection, "
+                     "which shows up later as false dropouts.".format(
+                         "; ".join("{:,.0f}× {}".format(r["per_guide"], r["step"]) for r in worst),
+                         th["cells_pass"]))
+    if moi_row:
+        if moi_row["status"] == "pass":
+            parts.append("At MOI {:g}, about {:.0f}% of the cells that took up virus carry a single guide.".format(
+                moi, moi_row["one_guide"]))
+        elif moi < th["moi_low"]:
+            parts.append("MOI {:g} is very low: almost all cells are untransduced, so most of the culture is wasted "
+                         "and reaching the needed representation takes far more cells.".format(moi))
+        else:
+            parts.append("At MOI {:g}, only about {:.0f}% of transduced cells carry one guide; the rest carry two or "
+                         "more, so a knockout's effect is mixed with its neighbours' and real hits are diluted.".format(
+                             moi, moi_row["one_guide"]))
+    sel = str(screen.get("selection") or "").strip()
+    if sel:
+        parts.append(f"Selection: {sel}.")
+    return {"id": "representation", "name": "Library representation and MOI", "status": st, "rows": rows,
+            "moi": moi_row, "library_guides": lib, "selection": sel, "why": " ".join(parts),
+            "rule": threshold_text(th)["cells"]}
+
+
+def _single_fraction(moi: float) -> float:
+    """Poisson: of the cells that were infected at all, the fraction that took exactly one virus."""
+    p1 = moi * math.exp(-moi)
+    any_ = 1.0 - math.exp(-moi)
+    return p1 / any_ if any_ > 0 else 0.0
 
 
 def gene_means(values, genes) -> dict:

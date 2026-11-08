@@ -295,6 +295,15 @@ METHODS_POOLED = [
     "genes have their mean removed.",
     "<b>Quality checks.</b> Each check reports pass, warn or fail against the thresholds shown in the table, which "
     "follow published guidance (MAGeCK QC; Hart et al. 2015, 2017; Joung et al. 2017).",
+    "<b>Library representation and MOI.</b> Cells per guide is the number of cells entered for each step divided by "
+    "the guides in the library; at least 500\u00d7 is expected at every step, because below that guides are lost by "
+    "sampling rather than by selection. The fraction of transduced cells carrying a single guide is the Poisson "
+    "p(1)/p(\u22651) at the MOI entered (Joung et al., Nat Protoc 2017; Doench, Nat Rev Genet 2018).",
+    "<b>Guides per gene.</b> Counted over targeting guides only; genes with fewer than four independent guides are "
+    "listed, since a gene-level score built on one or two guides cannot separate a real effect from a bad guide.",
+    "<b>Non-targeting controls.</b> Control guides are found by name (non-targeting, NTC, safe-harbour, EGFP, LacZ, "
+    "luciferase, AAVS1, or a pattern you set). Their median log2 fold change should be zero; their robust standard "
+    "deviation (IQR/1.349) gives the noise floor quoted as the smallest distinguishable effect.",
 ]
 
 

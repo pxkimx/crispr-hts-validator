@@ -69,6 +69,19 @@ EXAMPLES = {
               "reference": ["CTRL"]},
 }
 
+SCREEN_FIELDS = {
+    "cells_transduced": {"label": "Cells carrying a guide after selection", "type": "number", "max": 1e12,
+                         "hint": "cells \u00d7 MOI, after puromycin"},
+    "cells_bottleneck": {"label": "Fewest cells carried at any passage", "type": "number", "max": 1e12,
+                         "hint": "the tightest point of the whole experiment"},
+    "cells_harvested": {"label": "Cells harvested for sequencing", "type": "number", "max": 1e12,
+                        "hint": "per replicate"},
+    "moi": {"label": "MOI", "type": "number", "max": 20,
+            "hint": "about 0.3 keeps one guide per cell"},
+    "selection": {"label": "Selection", "type": "text",
+                  "hint": "e.g. 2 \u00b5g/ml puromycin, then 10 nM drug for 14 days"},
+}
+
 CONTROL_PATTERN = r"(?i)^(non[-_ ]?target(ing)?|nontargeting|ntc|neg(ative)?[-_ ]?control|safe[-_ ]?harbou?r|egfp|gfp|lacz|luciferase|luc|rfp|aavs1|ctrl|control)"
 
 
@@ -105,6 +118,7 @@ class Project:
         self.name = ""
         self.jobs: dict[str, Job] = {}
         self.thresholds: dict = {}
+        self.screen: dict = {}        # experiment numbers: cells per guide, MOI, selection (see SCREEN_FIELDS)
         self.positions: pd.DataFrame | None = None
         self.positions_name = ""
 
@@ -218,8 +232,26 @@ class Project:
         names = [c["name"] for c in comps]
         if len(set(names)) != len(names):
             raise ValueError("Two comparisons have the same name.")
+        screen = {}
+        for k, spec in SCREEN_FIELDS.items():
+            v = (d.get("screen") or {}).get(k)
+            if v in (None, "", False):
+                continue
+            if spec["type"] == "text":
+                screen[k] = str(v)[:300]
+                continue
+            try:
+                f = float(str(v).replace(",", "").replace(" ", ""))
+            except ValueError:
+                raise ValueError(f"“{spec['label']}” must be a number.")
+            if f <= 0:
+                raise ValueError(f"“{spec['label']}” must be greater than zero.")
+            if spec.get("max") and f > spec["max"]:
+                raise ValueError(f"“{spec['label']}” looks wrong: {f:g} is above {spec['max']:g}.")
+            screen[k] = f
         with self.lock:
             self.design = {"samples": rows, "comparisons": comps}
+            self.screen = screen
             self.qc = None
         return self.design
 
@@ -330,8 +362,12 @@ class Project:
         def work(job: Job):
             job.message = "Checking samples…"
             t = self.table
+            screen = dict(self.screen)
+            screen.setdefault("library_guides", float(len(t.guides)))
             r = qc.run_qc(t.counts, t.guides, t.genes, t.samples, self.design, t.reads, t.mapped,
-                          self.thresholds)
+                          self.thresholds, screen=screen,
+                          control_mask=self.control_mask("pattern", CONTROL_PATTERN))
+            r["screen"] = screen
             r["count_info"] = self.count_info
             r["threshold_text"] = qc.threshold_text(self.thresholds)
             self.qc = r
@@ -437,6 +473,7 @@ class Project:
                "methods": pooled_methods.METHODS, "positions": self.positions_info() if self.table else None,
                "enrichment": {k: enrichment.COLLECTIONS[k] for k in enrichment.COLLECTIONS},
                "norm_methods": pooled_stats.NORM_METHODS, "control_pattern": CONTROL_PATTERN,
+               "screen": self.screen, "screen_fields": SCREEN_FIELDS,
                "jobs": [j.public() for j in self.jobs.values() if j.state == "running"]}
         if self.library:
             out["library"] = {"guides": len(self.library.ids), "genes": len(set(self.library.genes)),
