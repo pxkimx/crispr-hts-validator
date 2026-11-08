@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRISPR HTS Validator</title>
+<link rel="icon" href="icon.svg">
+<script>
+/* Light | Dark: remembered per tool, applied before first paint; honours Toolbox Launcher's ?appearance= and message */
+(function(){var d=document.documentElement,t="dark";try{var s=localStorage.getItem("ch-theme");if(s==="light"||s==="dark")t=s;
+var a=new URLSearchParams(location.search).get("appearance");if(a==="light"||a==="dark"){t=a;localStorage.setItem("ch-theme",a)}}catch(e){}
+d.setAttribute("data-theme",t);
+window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolbox-appearance"&&(m.appearance==="light"||m.appearance==="dark")){if(window.setTheme)window.setTheme(m.appearance);else{d.setAttribute("data-theme",m.appearance);try{localStorage.setItem("ch-theme",m.appearance)}catch(_){}}}});})();
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+<div class="wrap">
+<header class="top">
+  <div class="bar">
+    <div class="brand" data-go="data"><img src="icon.svg" alt="">CRISPR HTS Validator<small id="ver"></small></div>
+    <nav class="tabs" id="tabs">
+      <button data-p="data" class="on"><span class="n">1</span>Data</button>
+      <button data-p="samples"><span class="n">2</span><span class="lbl">Samples</span></button>
+      <button data-p="quality"><span class="n">3</span>Quality<i class="dot" id="qcDot"></i></button>
+      <button data-p="analyse"><span class="n">4</span>Analyse</button>
+      <button data-p="results"><span class="n">5</span><span class="lbl">Results</span></button>
+      <button data-p="methods">Methods</button>
+    </nav>
+    <div class="readout" id="readout" title="Loaded screen">—</div>
+    <div class="pill" id="themePill" role="group" aria-label="Theme">
+      <button data-t="light" title="Light"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>Light</button>
+      <button data-t="dark" title="Dark"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark</button>
+    </div>
+  </div>
+  <div class="jobbar" id="jobbar"><div class="jobfill" id="jobfill"></div><span id="jobmsg"></span><button class="btn sm ghost" id="jobCancel">Cancel</button></div>
+</header>
+
+<main>
+<!-- ======================== DATA ======================== -->
+<section class="page on" id="p-data">
+  <div class="hero">
+    <div>
+      <div class="kicker" id="heroKicker">Pooled CRISPR screens · read counts to hit lists</div>
+      <h1>Check every step of your screen, <span class="grad">then find the hits</span></h1>
+      <p class="lede" id="heroLede">Load a count table or raw FASTQ files. The validator checks depth, evenness, replicates and essential-gene drop-out, normalises, and scores guides and genes the way MAGeCK does — with each result traceable to the guides behind it. Everything stays on this Mac.</p>
+      <div class="modepill" id="modePill" role="group" aria-label="Screen type"><button data-m="pooled" class="on"><b>Pooled screen</b><span>guides in one population · sequencing counts</span></button><button data-m="arrayed"><b>Arrayed screen</b><span>one reagent per well · plate reader</span></button></div>
+    </div>
+    <div class="hero-read card" aria-hidden="true">
+      <div class="hr-head"><span>read</span><span class="spacer"></span><span id="hrStat">guide matched</span></div>
+      <pre id="heroRead"></pre>
+      <div class="legend-row"><i class="sw g"></i>guide (20 nt)<i class="sw s"></i>scaffold<i class="sw o"></i>other</div>
+    </div>
+  </div>
+
+  <div id="pooledData">
+  <div class="grid g2">
+    <div class="card drop" id="dropCounts" data-kind="counts">
+      <div class="drop-ico">▦</div>
+      <h3>Count table</h3>
+      <p class="muted small">MAGeCK (<code>sgRNA, Gene, samples…</code>) or BAGEL (<code>SEQUENCE / GENE_CLONE, GENE, samples…</code>), tab or comma separated. Format is detected automatically.</p>
+      <div class="row"><button class="btn primary" data-browse="counts">Choose file…</button><span class="faint small">or drop it here</span></div>
+    </div>
+    <div class="card drop" id="dropFastq" data-kind="fastq">
+      <div class="drop-ico">≋</div>
+      <h3>Raw reads (FASTQ) + guide library</h3>
+      <p class="muted small">FASTQ or FASTQ.gz, one file per sample, and the library (ID, sequence, gene; CSV or TSV). Drop them together — the library is recognised by its contents.</p>
+      <div class="row"><button class="btn" data-browse="fastq">Add FASTQ…</button><button class="btn" data-browse="library">Library…</button><span class="faint small">or drop here</span></div>
+    </div>
+  </div>
+  <div class="card mt row small" id="posCard"><b>Guide positions</b><span class="muted">(optional, for copy-number correction: guide ID, chromosome, start — a CRISPRcleanR library file works)</span><span class="spacer"></span><span id="posInfo" class="muted"></span><button class="btn sm" data-browse="positions">Choose file…</button></div>
+  <input type="file" id="fileIn" hidden multiple>
+
+  <div id="fastqPanel" class="card mt hidden">
+    <div class="row"><h2>Read counting</h2><span class="spacer"></span><span class="muted small" id="libInfo"></span></div>
+    <table class="tbl" id="fastqTable"></table>
+    <div class="opts">
+      <label>Guide position in the read
+        <select id="cMode"><option value="auto">Find automatically (as mageck count)</option><option value="offset">Fixed start position</option><option value="scaffold">Search for the scaffold</option></select></label>
+      <label class="cTrimL hidden">Start position <input type="text" id="cTrim" value="1" size="4"></label>
+      <label class="cFlankL hidden">Scaffold sequence <input type="text" id="cFlank" value="GTTTTAGA" size="14"></label>
+      <label class="chk"><input type="checkbox" id="cMismatch"> Allow one mismatch <span class="faint">(off = exact match, as MAGeCK)</span></label>
+      <span class="spacer"></span>
+      <button class="btn primary" id="countBtn">Count reads</button>
+    </div>
+    <div id="countInfo"></div>
+  </div>
+
+  <div id="loaded" class="hidden">
+    <h2 class="sec">Loaded</h2>
+    <div class="grid g4" id="loadedTiles"></div>
+    <div class="card mt">
+      <div class="row"><h3 id="loadedName"></h3><span class="spacer"></span><button class="btn sm" data-go="samples">Next: check the samples →</button></div>
+      <div id="loadedNotes"></div>
+      <div class="scroll"><table class="tbl mono" id="preview"></table></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Or try a public screen</h2>
+  <div class="grid g3" id="examples"></div>
+  </div>
+
+  <div id="arrayedData" class="hidden">
+    <div class="card drop" id="dropArrayed" data-kind="arrayed">
+      <div class="drop-ico">▦</div>
+      <h3>Plate data</h3>
+      <p class="muted small">Drop all of a screen's files together: a <b>cellHTS set</b> (Platelist, one file per plate and replicate, Plateconf, annotation, Screenlog, Description), a <b>per-well table</b> (plate, well, one column per replicate or channel, optional gene and well type), or <b>plate-reader grids</b> such as EnVision exports.</p>
+      <div class="row"><button class="btn primary" data-browse="arrayed">Choose files…</button><span class="faint small">or drop them here</span><span class="spacer"></span><span class="muted small" id="aFiles"></span><button class="btn" id="aLoadBtn" disabled>Read the screen</button></div>
+    </div>
+    <div id="aLoaded" class="hidden">
+      <h2 class="sec">Loaded</h2>
+      <div class="grid g4" id="aTiles"></div>
+      <div class="card mt"><div class="row"><h3 id="aName"></h3><span class="spacer"></span><button class="btn sm" data-go="samples">Next: check the plate map →</button></div><div id="aNotes"></div><div class="small muted" id="aDesc"></div></div>
+    </div>
+    <h2 class="sec">Or try a public screen</h2>
+    <div class="grid g3" id="aExamples"></div>
+  </div>
+</section>
+
+<!-- ======================== ARRAYED: PLATE MAP ======================== -->
+<section class="page" id="p-amap">
+  <div class="kicker">Step 2</div>
+  <h1>Plate map</h1>
+  <p class="lede">Check which wells are samples and which are controls, and say what a hit looks like. Well types come from the plate configuration; you can mark more wells here.</p>
+  <div class="empty hidden" id="amapEmpty">Load a screen first.</div>
+  <div class="grid g2s" id="amapBody">
+    <div class="card">
+      <div class="row"><h2>Layout</h2><span class="spacer"></span><label class="small">Plate <select id="amPlate"></select></label></div>
+      <div class="plot" id="amLayout"></div>
+      <div class="legend" id="amLegend"></div>
+    </div>
+    <div class="card">
+      <h2>Well types</h2>
+      <p class="muted small">Give each well type a role. Z′ and SSMD use the positive and negative controls; normalisation and scores use the samples.</p>
+      <table class="tbl" id="amRoles"></table>
+      <h3 class="mt">Mark wells</h3>
+      <div class="form"><label>Wells <input type="text" id="amWells" placeholder="e.g. B01, B02 or P23 P24" size="20"></label>
+        <label>on plates <input type="text" id="amPlates" value="all" size="8"></label>
+        <label>as <input type="text" id="amContent" placeholder="neg, pos, empty or a name" size="14"></label><button class="btn sm" id="amMark">Mark</button></div>
+      <h3 class="mt">What is a hit?</h3>
+      <div class="radios" id="amDir">
+        <label><input type="radio" name="adir" value="lower"> <b>Lower signal</b><span class="desc">e.g. viability or reporter loss: reagents that reduce the readout</span></label>
+        <label><input type="radio" name="adir" value="higher"> <b>Higher signal</b><span class="desc">e.g. pathway activation: reagents that raise the readout</span></label>
+        <label><input type="radio" name="adir" value="both"> <b>Either direction</b></label>
+      </div>
+      <label class="small" id="amChanL">Channel <select id="amChannel"></select></label>
+    </div>
+  </div>
+  <div class="row mt"><span class="spacer"></span><button class="btn primary" id="amSave">Save and check the plates →</button></div>
+</section>
+
+<!-- ======================== ARRAYED: QUALITY ======================== -->
+<section class="page" id="p-aquality">
+  <div class="row">
+    <div><div class="kicker">Step 3</div><h1>Plate quality</h1></div>
+    <span class="spacer"></span>
+    <button class="btn primary" id="aqBtn">Run checks</button>
+  </div>
+  <p class="lede">Plate-to-plate differences, control separation, edge and row/column patterns, and replicate agreement — each with pass, warn or fail and why.</p>
+  <div class="empty" id="aqEmpty">Run the checks to see them here.</div>
+  <div id="aqOverall"></div>
+  <div class="qcgrid" id="aqCards"></div>
+</section>
+
+<!-- ======================== ARRAYED: ANALYSE ======================== -->
+<section class="page" id="p-aanalyse">
+  <div class="kicker">Step 4</div>
+  <h1>Normalise and call hits</h1>
+  <p class="lede">Each plate is normalised on its own, wells are scored, replicates combined, and hits called with a threshold that every replicate has to support.</p>
+  <div class="grid g2s">
+    <div class="card">
+      <h2>Normalisation (per plate)</h2>
+      <div id="aNorm" class="radios"></div>
+      <label class="chk mt"><input type="checkbox" id="aLog"> Log₂-transform values first <span class="faint">(for plate median, robust z and B-score)</span></label>
+      <label class="chk"><input type="checkbox" id="aFlagged"> Keep wells flagged in the screen log <span class="faint">(off = leave them out)</span></label>
+    </div>
+    <div class="card">
+      <h2>Scores and hits</h2>
+      <div class="form">
+        <label>Score <select id="aScore"><option value="z">z-score (default)</option><option value="ssmd">robust SSMD (Zhang 2011)</option></select></label>
+        <label>Combine replicates by <select id="aSumm"><option value="mean">mean (default)</option><option value="median">median</option><option value="min">the weakest replicate</option></select></label>
+        <label>Hit when the combined score ≥ <input type="text" id="aThr" value="2" size="4"></label>
+        <label>… and every replicate ≥ <input type="text" id="aRepMin" value="1" size="4"> <span class="faint small">(replicate agreement)</span></label>
+        <label>Gene is a hit when ≥ <input type="text" id="aGeneFr" value="0.5" size="4"> of its wells are hits</label>
+      </div>
+      <p class="muted small" id="aDirNote"></p>
+      <div class="row mt"><span class="spacer"></span><button class="btn primary lg" id="aRunBtn">Run analysis</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================== ARRAYED: RESULTS ======================== -->
+<section class="page" id="p-aresults">
+  <div class="row">
+    <div><div class="kicker">Step 5</div><h1>Hits</h1></div>
+    <span class="spacer"></span>
+    <a class="btn" id="aPdfBtn" href="/api/a/report" download>PDF report</a>
+    <div class="menu"><button class="btn" id="aExpBtn">Export ▾</button>
+      <div class="menu-pop" id="aExpMenu">
+        <a data-aexp="hits" data-fmt="csv">Hit wells (CSV)</a>
+        <a data-aexp="wells" data-fmt="csv">All wells with scores (CSV)</a>
+        <a data-aexp="wells" data-fmt="xlsx">All wells with scores (Excel)</a>
+        <a data-aexp="genes" data-fmt="csv">Gene calls (CSV)</a>
+        <a data-aexp="raw" data-fmt="csv">Raw measurements (CSV)</a>
+        <a data-aexp="qc" data-fmt="csv">Plate checks (CSV)</a>
+      </div>
+    </div>
+  </div>
+  <div class="empty" id="arEmpty">Run the analysis to see hits.</div>
+  <div id="arBody" class="hidden">
+    <div class="grid g4" id="arTiles"></div>
+    <div class="card mt hidden" id="arCompare"></div>
+    <div class="grid g2 mt">
+      <div class="card"><div class="row"><h3>Plate map of scores</h3><span class="spacer"></span><label class="small">Plate <select id="arPlate"></select></label></div><div class="plot" id="arMap"></div><div class="legend small">Ringed wells are hits · ◆ positive, ◇ negative control</div></div>
+      <div class="card"><h3>Replicate 1 vs replicate 2</h3><div class="plot" id="arScatter"></div></div>
+    </div>
+    <div class="grid g2 mt">
+      <div class="card"><h3>Score distribution (sample wells)</h3><div class="plot" id="arHist"></div></div>
+      <div class="card"><h3>Hits per plate</h3><div class="plot" id="arPerPlate"></div></div>
+    </div>
+    <div class="grid g2s mt">
+      <div class="card"><div class="row"><h3>Hit wells</h3><span class="spacer"></span><input type="text" id="arSearch" placeholder="Search gene / reagent…" size="18"></div><div class="scroll tall"><table class="tbl" id="arHits"></table></div></div>
+      <div class="card"><h3>Genes</h3><div class="scroll tall"><table class="tbl" id="arGenes"></table></div></div>
+    </div>
+    <div class="card mt pathways" id="apwCard"></div>
+  </div>
+</section>
+
+<!-- ======================== SAMPLES ======================== -->
+<section class="page" id="p-samples">
+  <div class="kicker">Step 2</div>
+  <h1>Samples and comparisons</h1>
+  <p class="lede">Mark the reference (plasmid or T0) samples, group replicates under one condition name, and say what to compare. The first guess comes from the sample names — check it.</p>
+  <div class="empty hidden" id="samplesEmpty">Load data first.</div>
+  <div class="grid g2s" id="samplesBody">
+    <div class="card">
+      <h2>Sample sheet</h2>
+      <table class="tbl" id="sampleTable"></table>
+    </div>
+    <div class="card">
+      <div class="row"><h2>Comparisons</h2><span class="spacer"></span><button class="btn sm" id="addComp">+ Add</button><button class="btn sm" data-browse="screeninfo" title="BAGEL screen-info file: name, replicates, controls">Import screen-info…</button></div>
+      <p class="muted small">Each comparison tests treatment samples against control samples (as <code>mageck test -t … -c …</code>). Replicates inside a group are combined by their median.</p>
+      <div id="compList"></div>
+    </div>
+  </div>
+  <div class="row mt"><span class="spacer"></span><span class="muted small" id="designMsg"></span><button class="btn primary" id="saveDesign">Save and check quality →</button></div>
+</section>
+
+<!-- ======================== QUALITY ======================== -->
+<section class="page" id="p-quality">
+  <div class="row">
+    <div><div class="kicker">Step 3</div><h1>Quality checks</h1></div>
+    <span class="spacer"></span>
+    <button class="btn" id="thBtn">Thresholds…</button>
+    <button class="btn primary" id="qcBtn">Run checks</button>
+  </div>
+  <p class="lede">Each check says pass, warn or fail and why, in one sentence. Thresholds are defaults from published guidance; change them under Thresholds.</p>
+  <div class="card hidden" id="thPanel"><h3>Thresholds</h3><p class="muted small">Scientific choices — the defaults are stated in Methods. Changes apply the next time you run the checks.</p><div class="thgrid" id="thGrid"></div></div>
+  <div class="empty" id="qcEmpty">Run the checks to see them here.</div>
+  <div id="qcOverall"></div>
+  <div class="qcgrid" id="qcCards"></div>
+</section>
+
+<!-- ======================== ANALYSE ======================== -->
+<section class="page" id="p-analyse">
+  <div class="kicker">Step 4</div>
+  <h1>Normalise and score</h1>
+  <p class="lede">Guides are tested one by one, then ranked and combined into gene scores with α-RRA, following MAGeCK. Defaults match <code>mageck test</code>.</p>
+  <div class="card mb">
+    <h2>Method</h2>
+    <div class="methodpick" id="methodPick"></div>
+    <div class="row mt small" id="methodOpts">
+      <label class="chk" id="cnL"><input type="checkbox" id="cnCorrect"> Copy-number correction (CRISPRcleanR-style) <span class="faint" id="cnNote"></span></label>
+      <span class="spacer"></span>
+      <span id="drugzOpts" class="row hidden"><label class="chk"><input type="checkbox" id="dzPaired" checked> paired replicates (in the order listed)</label>
+        <label>Leave out genes <input type="text" id="dzRemove" placeholder="e.g. EGFP, LacZ, luciferase" size="24"></label></span>
+    </div>
+  </div>
+  <div class="grid g2s" id="mageckOpts">
+    <div class="card">
+      <h2>Normalisation</h2>
+      <div id="normOpts" class="radios"></div>
+      <h3 class="mt">Control guides</h3>
+      <div class="radios" id="ctlOpts">
+        <label><input type="radio" name="ctl" value="none" checked> None</label>
+        <label><input type="radio" name="ctl" value="pattern"> Genes whose name matches <input type="text" id="ctlPattern" size="34"></label>
+        <label><input type="radio" name="ctl" value="list"> These genes or guide IDs <textarea id="ctlList" rows="2" placeholder="e.g. NonTargeting, EGFP, LacZ"></textarea></label>
+      </div>
+      <div class="muted small" id="ctlInfo"></div>
+      <label class="chk mt"><input type="checkbox" id="ctlNull"> Use the control guides as the null for gene p-values <span class="faint">(mageck --control-sgrna)</span></label>
+    </div>
+    <div class="card">
+      <h2>Test settings</h2>
+      <div class="form">
+        <label>Guides left out <select id="aZero"><option value="both">zero in both control and treatment (default)</option><option value="control">zero in control</option><option value="treatment">zero in treatment</option><option value="any">zero in either</option><option value="none">none</option></select></label>
+        <label>Gene log fold change <select id="aLfc"><option value="median">median of its guides (default)</option><option value="mean">mean of its guides</option></select></label>
+        <label>α cut-off from guides with p ≤ <input type="text" id="aAlpha" value="0.25" size="5"> <span class="faint small">(default 0.25)</span></label>
+      </div>
+      <h3 class="mt">Comparisons to run</h3>
+      <div id="aComps" class="checks"></div>
+      <p class="muted small" id="methodHint"></p>
+      <div class="row mt"><span class="spacer"></span><button class="btn primary lg" id="runBtn">Run analysis</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================== RESULTS ======================== -->
+<section class="page" id="p-results">
+  <div class="row">
+    <div><div class="kicker">Step 5</div><h1>Results</h1></div>
+    <span class="spacer"></span>
+    <select id="rComp"></select>
+    <a class="btn" id="pdfBtn" href="/api/report" download>PDF report</a>
+    <div class="menu"><button class="btn" id="expBtn">Export ▾</button>
+      <div class="menu-pop" id="expMenu">
+        <a data-exp="genes" data-fmt="csv">Gene summary (CSV)</a>
+        <a data-exp="genes" data-fmt="txt">Gene summary (MAGeCK .txt)</a>
+        <a data-exp="genes" data-fmt="xlsx">Gene summary (Excel)</a>
+        <a data-exp="guides" data-fmt="csv">Guide summary (CSV)</a>
+        <a data-exp="guides" data-fmt="txt">Guide summary (MAGeCK .txt)</a>
+        <a data-exp="counts" data-fmt="csv">Raw counts (CSV)</a>
+        <a data-exp="normcounts" data-fmt="csv">Normalised counts (CSV)</a>
+        <a data-exp="qc" data-fmt="csv">Quality checks (CSV)</a>
+        <a data-exp="all" data-fmt="xlsx">Everything (Excel workbook)</a>
+      </div>
+    </div>
+  </div>
+  <div class="empty" id="resEmpty">Run the analysis to see results.</div>
+  <div id="resBody" class="hidden">
+    <div class="grid g4" id="resTiles"></div>
+    <div class="grid g2 mt">
+      <div class="card chart-card"><div class="row"><h3>Volcano</h3><span class="spacer"></span><span class="faint small">gene LFC vs −log₁₀ p · FDR ≤ <input type="text" id="fdrCut" value="0.05" size="4"></span></div><div class="plot" id="volcano"></div></div>
+      <div class="card chart-card"><div class="row"><h3>Gene rank</h3><span class="spacer"></span><div class="pill small-pill" id="rankDir"><button data-d="neg" class="on">Depleted</button><button data-d="pos">Enriched</button></div></div><div class="plot" id="rankplot"></div></div>
+    </div>
+    <div class="grid g2s mt">
+      <div class="card">
+        <div class="row"><h3>Genes</h3><span class="spacer"></span><input type="text" id="gSearch" placeholder="Search gene…" size="18"></div>
+        <div class="scroll tall"><table class="tbl sortable" id="geneTable"></table></div>
+        <div class="row small muted" id="gPager"></div>
+      </div>
+      <div class="card" id="geneView"><div class="empty">Click a gene to see every guide behind its score.</div></div>
+    </div>
+    <div class="card mt pathways" id="pwCard"></div>
+    <div class="card mt small muted" id="resNotes"></div>
+  </div>
+</section>
+
+<!-- ======================== METHODS ======================== -->
+<section class="page" id="p-methods">
+  <div class="kicker">How it works</div>
+  <h1>Methods, defaults and validation</h1>
+  <div class="grid g2 methods" id="methodsBody"></div>
+</section>
+</main>
+</div>
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+<script src="bg.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+<script src="arrayed.js"></script>
+<script src="methods.js"></script>
+</body>
+</html>

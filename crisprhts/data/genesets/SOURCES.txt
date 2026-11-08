@@ -1,0 +1,7 @@
+Gene sets bundled with CRISPR HTS Validator (built by scripts/build_genesets.py)
+
+Gene Ontology (releases/2026-07-26): go-basic.obo, goa_human.gaf, mgi.gaf from geneontology.org. Licence: CC BY 4.0.
+  Cite: The Gene Ontology Consortium, Genetics 2023; Ashburner et al., Nat Genet 2000.
+Reactome (current release at build time): ReactomePathways.gmt from reactome.org. Licence: CC BY 4.0.
+  Cite: Milacic et al., Nucleic Acids Res 2024.
+Sets with 10 to 500 genes. GO sets include genes annotated to descendant terms (is_a, part_of); NOT annotations are excluded.

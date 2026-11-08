@@ -1,0 +1,5 @@
+# Reference outputs made 2026-11-07 13:02; drugZ commit eb15d34
+# run from test-data/reference/drugz; paths are relative to it
+# TKOv3 T18 (untreated) vs T18 starved (treated): replicates paired A-A, B-B, C-C; and unpaired
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python drugz/drugz.py -i ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -o tkov3_starved.drugz.txt -f tkov3_starved.drugz_fc.txt -c T18_A,T18_B,T18_C -x T18_A_Starved,T18_B_Starved,T18_C_Starved -q
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python drugz/drugz.py -i ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -o tkov3_starved_unpaired.drugz.txt -c T18_A,T18_B,T18_C -x T18_A_Starved,T18_B_Starved,T18_C_Starved -unpaired -q

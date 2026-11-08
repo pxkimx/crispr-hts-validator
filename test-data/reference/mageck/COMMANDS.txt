@@ -1,0 +1,10 @@
+# Reference outputs made 2026-11-07 02:56 on macOS 27.0.1
+# mageck 0.5.9.5  python 3.12.4
+# run from test-data/reference/mageck; paths are relative to it
+mageck count -l ../../mageck-demo/demo2/library.txt -n demo2 --sample-label L1,CTRL --fastq ../../mageck-demo/demo2/test1.fastq ../../mageck-demo/demo2/test2.fastq
+mageck test -k demo2.count.txt -t L1 -c CTRL -n demo2
+mageck test -k ../../mageck-demo/demo1/sample.txt -t HL60.final,KBM7.final -c HL60.initial,KBM7.initial -n demo1
+mageck test -k ../../mageck-demo/demo3/leukemia.new.csv -t HL60.final,KBM7.final -c HL60.initial,KBM7.initial -n demo3
+mageck test -k ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -t T3_A,T3_B,T3_C -c T0_- -n tkov3_T3
+mageck test -k ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -t T18_A,T18_B,T18_C -c T0_- -n tkov3_T18
+mageck test -k ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -t T18_A_Starved,T18_B_Starved,T18_C_Starved -c T0_- -n tkov3_T18_Starved

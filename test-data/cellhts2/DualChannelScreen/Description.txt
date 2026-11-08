@@ -1,0 +1,30 @@
+[Lab description]
+Experimenter name:
+Laboratory:
+Contact information:
+
+[Screen description]
+Screen: DualChanData
+Title: Example data set for a dual-color screen
+Version: 0.9
+Date: Feb 2006
+Screentype: RNA interference
+Organism: Drosophila melanogaster
+Celltype: 
+Library: HFA
+Assay: Reporter 1 for growth and viability and Reporter 2 for pathway activity
+Assaytype: homogenous
+Assaydescription:  Cells were treated with dsRNAs in three 384-well plates
+
+[Publication description]
+Publicationtitle: 
+Reference: 
+PMIDs: 
+URL: 
+License: 
+Abstract:
+
+[Files]
+plateList: Platelist.txt
+plateConf: Plateconf.txt
+screenLog: Screenlog.txt

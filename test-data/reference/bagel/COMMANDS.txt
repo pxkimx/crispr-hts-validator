@@ -1,0 +1,10 @@
+# Reference outputs made 2026-11-07 13:01; BAGEL commit 53388ad
+# numpy 1.26.4 pandas 2.1.4 scipy 1.17.1
+# run from test-data/reference/bagel; paths are relative to it
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py fc -i ../../hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt -o tkov3 -c T0_-
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py bf -i tkov3.foldchange -o tkov3_T3.bf -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt -c T3_A,T3_B,T3_C -s 1
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py pr -i tkov3_T3.bf -o tkov3_T3.pr -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py bf -i tkov3.foldchange -o tkov3_T18.bf -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt -c T18_A,T18_B,T18_C -s 1
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py pr -i tkov3_T18.bf -o tkov3_T18.pr -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py bf -i tkov3.foldchange -o tkov3_T18_Starved.bf -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt -c T18_A_Starved,T18_B_Starved,T18_C_Starved -s 1
+~/Library/Application Support/CRISPR HTS Validator/reference-venv-hart/bin/python bagel/BAGEL.py pr -i tkov3_T18_Starved.bf -o tkov3_T18_Starved.pr -e ../../hart-bagel/CEGv2.txt -n ../../hart-bagel/NEGv1.txt

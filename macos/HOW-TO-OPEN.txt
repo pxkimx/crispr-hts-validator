@@ -1,0 +1,27 @@
+CRISPR HTS Validator — analyse pooled and arrayed CRISPR screens, with a quality check at every step
+by Paul H. Kim · https://paul-h-kim.com/software/crispr-hts-validator
+
+1. Drag "CRISPR HTS Validator.app" into your Applications folder (or anywhere you like).
+
+2. Double-click it. Because the app is free and not registered with Apple, macOS
+   may say it "cannot be opened" or "cannot verify the developer" the first time:
+     - Click Done (or OK).
+     - Open System Settings → Privacy & Security, scroll down, and click
+       "Open Anyway" next to CRISPR HTS Validator. Confirm with your password.
+     - On macOS 14 or older you can instead right-click (Control-click) the app,
+       choose Open, then click Open.
+   You only need to do this once.
+
+3. The first start sets up Python's scientific libraries (numpy, pandas, scipy,
+   statsmodels, matplotlib and others) in
+   ~/Library/Application Support/CRISPR HTS Validator. This needs internet once
+   and takes a minute or two. The app then opens in your web browser.
+
+Needs: a Mac with macOS 12 or newer and Python 3.9 or newer. Most Macs already
+have it; if not, macOS offers to install the "command line developer tools"
+(click Install), or get Python from https://www.python.org/downloads/ .
+
+Everything runs on your Mac: your screen data is never uploaded. Closing the
+browser tab quits the app. Example screens (Hart lab HAP1 TKOv3, MAGeCK demos,
+cellHTS2 KcViab) are included, each under its own licence (in the app's
+test-data folder).

@@ -1,0 +1,28 @@
+# environments, caches, logs
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.log
+.DS_Store
+# built app and release files
+*.app/
+*.zip
+dist/
+build/
+# never publish user data or results; only the public test-data/ is tracked
+uploads/
+results/
+exports/
+*.xlsx
+.claude/
+# MAGeCK's R report templates in the reference outputs
+test-data/reference/**/*.Rmd
+# large intermediate files from the official Hart lab tools (not needed by the tests)
+test-data/reference/bagel/*.normed_readcount
+test-data/reference/bagel/*.foldchange
+test-data/reference/drugz/*_fc.txt
+
+# internal brief for the building session (not part of the tool)
+SPEC.md

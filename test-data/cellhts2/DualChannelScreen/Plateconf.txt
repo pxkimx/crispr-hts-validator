@@ -1,0 +1,8 @@
+Wells: 384
+Plates: 3
+Plate	Well	Content
+*	*	sample
+*	A01	geneA
+*	A02	geneB
+*	B01	geneC
+*	B02	geneD
