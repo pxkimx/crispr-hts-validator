@@ -70,6 +70,22 @@ def test_running_the_checks_saves_what_was_typed_and_reset_puts_it_back():
     assert session.Project().thresholds == {}
 
 
+def test_arrayed_thresholds_are_remembered_too():
+    from crisprhts.arrayed_session import ArrayedProject
+    A = ArrayedProject(session.Project())
+    A.load_example("kcviab")
+    _wait(A.host, A.run_qc({"zprime_pass": 0.8, "rep_pass": 0.9}))
+    assert A.qc["thresholds"]["zprime_pass"] == 0.8
+    assert prefs.get("arrayed_thresholds", arrayed_stats.QC_THRESHOLDS) == {"zprime_pass": 0.8, "rep_pass": 0.9}
+    # a later run with nothing posted still uses them, and the state hands the app both sets
+    _wait(A.host, A.run_qc())
+    assert A.qc["thresholds"]["zprime_pass"] == 0.8
+    st = A.summary()
+    assert st["qc_thresholds"]["zprime_pass"] == 0.8
+    assert st["qc_threshold_defaults"]["zprime_pass"] == arrayed_stats.QC_THRESHOLDS["zprime_pass"]
+    assert st["default_norm"] == "robust_z"
+
+
 def test_clearing_one_section_leaves_the_other():
     prefs.set("pooled_thresholds", {"coverage_pass": 500}, qc.THRESHOLDS)
     prefs.set("arrayed_thresholds", {"zprime_pass": 0.6}, arrayed_stats.QC_THRESHOLDS)

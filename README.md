@@ -89,7 +89,7 @@ the reference; 90/10 skew 10/20; replicate Pearson r 0.60/0.40 (Spearman shown b
 plate median ratio 2/5, Z′ 0.5/0, |SSMD| 3/2, edge 10%/20%, row-and-column share 10%/25%, replicate r 0.70/0.40,
 default normalisation **robust z**, hit when the combined score passes 2 and every replicate passes 1.
 
-Change any of them under *Thresholds* on the Quality page. A changed threshold is remembered in
+Change any of them under *Thresholds* on the Quality page (pooled and arrayed each have their own panel). A changed threshold is remembered in
 `~/Library/Application Support/CRISPR HTS Validator/preferences.json` (that file holds nothing else, and
 *Restore defaults* removes it). Set `CH_PREFS` to use a different file.
 

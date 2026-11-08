@@ -156,9 +156,11 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
   <div class="row">
     <div><div class="kicker">Step 3</div><h1>Plate quality</h1></div>
     <span class="spacer"></span>
+    <button class="btn" id="aThBtn">Thresholds…</button>
     <button class="btn primary" id="aqBtn">Run checks</button>
   </div>
-  <p class="lede">Plate-to-plate differences, control separation, edge and row/column patterns, and replicate agreement — each with pass, warn or fail and why.</p>
+  <p class="lede">Plate-to-plate differences, control separation, edge and row/column patterns, and replicate agreement — each with pass, warn or fail and why. Thresholds are defaults from published guidance; change them under Thresholds and they are remembered.</p>
+  <div class="card hidden" id="aThPanel"><div class="row"><h3>Thresholds</h3><span class="spacer"></span><span class="muted small" id="aThSaved"></span><button class="btn sm" id="aThReset">Restore defaults</button></div><p class="muted small">Scientific choices — the defaults are stated in Methods. A box you change is kept for next time, on this Mac only; empty means the default.</p><div class="thgrid" id="aThGrid"></div></div>
   <div class="empty" id="aqEmpty">Run the checks to see them here.</div>
   <div id="aqOverall"></div>
   <div class="qcgrid" id="aqCards"></div>

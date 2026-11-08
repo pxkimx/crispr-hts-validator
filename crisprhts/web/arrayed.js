@@ -119,12 +119,43 @@ window.A = (() => {
   };
 
   /* ---------------- plate QC */
+  const ATH_LABELS = {
+    plate_ratio_warn: "Plate median ratio \u2014 warn above", plate_ratio_fail: "Plate median ratio \u2014 fail above",
+    zprime_pass: "Z\u2032 \u2014 pass at", zprime_fail: "Z\u2032 \u2014 fail below",
+    ssmd_pass: "|SSMD| \u2014 pass at", ssmd_fail: "|SSMD| \u2014 fail below",
+    edge_pass: "Edge effect \u2014 pass up to", edge_fail: "Edge effect \u2014 fail above",
+    rowcol_pass: "Row/column share \u2014 pass up to", rowcol_fail: "Row/column share \u2014 fail above",
+    rep_pass: "Replicate r \u2014 pass at", rep_fail: "Replicate r \u2014 fail below",
+  };
+  $("#aThBtn").onclick = () => { $("#aThPanel").classList.toggle("hidden"); renderAThresholds(); };
+  function renderAThresholds() {
+    const th = (AS && AS.qc_thresholds) || {};
+    const def = (AS && AS.qc_threshold_defaults) || {};
+    $("#aThGrid").innerHTML = Object.entries(ATH_LABELS).map(([k, l]) => {
+      const v = th[k], d = def[k];
+      const changed = v != null && d != null && +v !== +d;
+      return `<label>${l}<input type="text" class="${changed ? "set" : ""}" data-ath="${k}" value="${v == null ? "" : v}" placeholder="${d == null ? "default" : d}"></label>`;
+    }).join("");
+    const n = Object.keys(ATH_LABELS).filter((k) => th[k] != null && def[k] != null && +th[k] !== +def[k]).length;
+    $("#aThSaved").textContent = n ? `${n} changed from the default, remembered` : "all at the default";
+    $$("[data-ath]").forEach((i) => (i.oninput = () => i.classList.toggle("set", i.value.trim() !== "" && +i.value !== +def[i.dataset.ath])));
+  }
+  $("#aThReset").onclick = async () => {
+    try {
+      const r = await api("/api/thresholds/reset", { which: "arrayed" });
+      if (AS) AS.qc_thresholds = r.thresholds;
+      renderAThresholds();
+      toast("Thresholds back to the defaults \u2014 run the checks to apply them.");
+    } catch (e) { toast(e.message, true); }
+  };
   $("#aqBtn").onclick = () => runQC();
   async function runQC() {
     if (!AS || !AS.screen) return toast("Load a screen first.", true);
+    const thresholds = {};
+    $$("[data-ath]").forEach((i) => { if (i.value.trim() !== "" && isFinite(+i.value)) thresholds[i.dataset.ath] = +i.value; });
     try {
-      const j = await api("/api/a/qc", {});
-      watchJob(j.id, async () => { AQ = await api("/api/a/qc" + (qcPlate ? "?plate=" + qcPlate : "")); AS.qc_overall = AQ.overall; readout(); renderQC(); });
+      const j = await api("/api/a/qc", { thresholds });
+      watchJob(j.id, async () => { AQ = await api("/api/a/qc" + (qcPlate ? "?plate=" + qcPlate : "")); AS.qc_overall = AQ.overall; if (AQ.thresholds) AS.qc_thresholds = AQ.thresholds; readout(); renderQC(); renderAThresholds(); });
     } catch (e) { toast(e.message, true); }
   }
   async function renderQC() {
