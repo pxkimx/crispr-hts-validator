@@ -80,6 +80,16 @@ Needs macOS 12 or newer and Python 3.9 or newer. The first start makes a private
 matplotlib, reportlab; needs internet once). The app opens at http://localhost:8788 and quits completely when its
 window closes. Eight example screens (pooled and arrayed) open with one click.
 
+## How it looks
+
+Five styles, chosen from **Style** in the top bar and remembered: **Sequencer** (the original deep teal, with
+reads drifting behind the page), **Paper** (a journal page — warm stock, serif headings, good for figures bound
+for a manuscript), **Clean** (Apple-like greys and one blue), **Plate** (after the arrayed heatmaps — cool grid,
+square wells, cyan and magenta) and **Contrast** (heavy rules, no translucency, no background animation, for a
+projector or tired eyes). Each works in light and dark, so the ☀ Light | ☾ Dark pill keeps working, and every
+text colour in all ten combinations clears the 4.5:1 contrast ratio. Charts and the background animation take
+their colours from whichever style is on.
+
 ## Thresholds
 
 Every pass / warn / fail line is a scientific choice. The defaults follow published guidance and were confirmed on
@@ -103,6 +113,15 @@ Change any of them under *Thresholds* on the Quality page (pooled and arrayed ea
   genes to within about 12%, but on the near-diploid HAP1 line it also flattens clusters of neighbouring essential
   genes and the essential-gene AUC falls from 0.998 to 0.994 - hence off by default, for cancer lines.
 
+## Speed
+
+A genome-wide MAGeCK-style test on the 70,877-guide TKOv3 screen takes about **6 seconds** on a recent Mac,
+against 25 before version 1.4. Nearly all of that time is the permutation null, and nearly all of *that* goes to
+the few genes with many guides: in TKOv3 a single gene with 94 guides costs more than all 17,247 genes with four
+put together. Those permutation blocks now run on several cores, each starting from the generator state it would
+have reached by drawing in turn (jump-ahead), so the random numbers, and therefore the p-values, are exactly
+those of a single-threaded run — `CH_RRA_WORKERS=1` forces that path and gives bit-identical output.
+
 ## Tests and validation
 
 ```bash
@@ -121,6 +140,8 @@ Change any of them under *Thresholds* on the Quality page (pooled and arrayed ea
   non-targeting controls, and Spearman against scipy.
 - `tests/test_prefs.py` — thresholds are remembered, survive a damaged file and a renamed threshold, and can be
   restored; the confirmed defaults are checked by value.
+- `tests/test_units.py` also checks that jump-ahead reproduces the generator's stream and that the parallel and
+  single-threaded gene tests agree exactly.
 - `tests/test_app.py` — the app end to end, and quitting when the window closes.
 
 ## Test data and credits

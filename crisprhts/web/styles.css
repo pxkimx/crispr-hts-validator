@@ -1,0 +1,156 @@
+/* Five looks for the app. Each one sets the tokens style.css defines, in a light and a dark version, so the
+   ☀ Light | ☾ Dark pill keeps working whichever is chosen. Only fonts that ship with macOS are used, so every
+   style works offline. The default, "sequencer", is style.css itself and overrides nothing.
+
+   Cascade: :root[data-style="x"] (0,2,0) sits after style.css, so it beats :root[data-theme="dark"]; the
+   dark version is :root[data-style="x"][data-theme="dark"] (0,3,0), which beats both. Every style therefore
+   defines both, or dark mode would fall back to this style's light colours.
+
+   Charts, the plate heatmaps and the background animation read these same tokens, so they follow along. */
+
+/* ══════════════════ 2 · Paper — a journal page: warm stock, serif headings, hairline rules */
+:root[data-style="paper"] {
+  --bg:#f7f5ef; --panel:rgba(255,253,248,.90); --panel-solid:#fffdf8; --surface:#fffdf8;
+  --line:rgba(28,26,22,.11); --line2:rgba(28,26,22,.22);
+  --ink:#1c1a16; --ink2:#413c34; --muted:#67604f; --faint:#756e63;
+  --accent:#2f4858; --accent2:#9c4221; --accent-soft:rgba(47,72,88,.10);
+  --good:#2e6930; --warning:#b07d18; --serious:#b4571f; --critical:#9e2b25;
+  --good-ink:#2e6930; --warn-ink:#8a5a00; --crit-ink:#9e2b25;
+  --neg:#2f4858; --pos:#9e2b25; --ns:#c4bdab; --ess:#9c4221; --non:#2f4858;
+  --grid:#e7e1d3; --axis:#c6bca5;
+  --shadow:0 1px 1px rgba(40,34,22,.05),0 6px 18px rgba(40,34,22,.07);
+  --radius:9px; --veil:rgba(247,245,239,.60);
+  --font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+}
+:root[data-style="paper"][data-theme="dark"] {
+  --bg:#191712; --panel:rgba(35,32,26,.86); --panel-solid:#23201a; --surface:#1f1c17;
+  --line:rgba(236,229,214,.10); --line2:rgba(236,229,214,.20);
+  --ink:#ece5d6; --ink2:#cfc6b2; --muted:#a39981; --faint:#898071;
+  --accent:#d9a441; --accent2:#88aecb; --accent-soft:rgba(217,164,65,.14);
+  --good-ink:#6fbf6f; --warn-ink:#dfae4a; --crit-ink:#e58b86;
+  --neg:#88aecb; --pos:#d9756e; --ns:#4b463c; --ess:#d9a441; --non:#88aecb;
+  --grid:#2a261e; --axis:#4a4336;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 8px 26px rgba(0,0,0,.40);
+  --veil:rgba(25,23,18,.55);
+}
+:root[data-style="paper"] h1 { letter-spacing:-.012em; }
+:root[data-style="paper"] .kicker { font-family:var(--mono); letter-spacing:.14em; }
+:root[data-style="paper"] nav.tabs button.on { background:transparent; color:var(--ink); box-shadow:inset 0 -2px 0 var(--accent); border-radius:0; }
+:root[data-style="paper"] nav.tabs button.on .n { background:transparent; color:var(--accent); border-color:var(--accent); }
+:root[data-style="paper"] header.top { border-bottom:1px solid var(--line2); }
+:root[data-style="paper"] .card { border-radius:var(--radius); }
+
+/* ══════════════════ 3 · Clean — Apple-like: soft greys, one blue, generous rounding */
+:root[data-style="clean"] {
+  --bg:#f5f5f7; --panel:rgba(255,255,255,.92); --panel-solid:#ffffff; --surface:#ffffff;
+  --line:rgba(0,0,0,.08); --line2:rgba(0,0,0,.16);
+  --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --faint:#6f6f73;
+  --accent:#006dda; --accent2:#5e5ce6; --accent-soft:rgba(0,113,227,.10);
+  --good:#1a8f3c; --warning:#e8900c; --serious:#e06c2a; --critical:#d7262f;
+  --good-ink:#117a30; --warn-ink:#8a5a00; --crit-ink:#c0202a;
+  --neg:#0071e3; --pos:#d7262f; --ns:#c7c7cc; --ess:#ff6b2c; --non:#0071e3;
+  --grid:#e8e8ed; --axis:#c7c7cc;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.07);
+  --radius:18px; --veil:rgba(245,245,247,.62);
+  --serif:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;
+}
+:root[data-style="clean"][data-theme="dark"] {
+  --bg:#0b0b0d; --panel:rgba(28,28,30,.88); --panel-solid:#1c1c1e; --surface:#161618;
+  --line:rgba(255,255,255,.09); --line2:rgba(255,255,255,.18);
+  --ink:#f5f5f7; --ink2:#d6d6da; --muted:#98989d; --faint:#7c7c82;
+  --accent:#0a84ff; --accent2:#7d7aff; --accent-soft:rgba(10,132,255,.16);
+  --good-ink:#4cd964; --warn-ink:#ffb340; --crit-ink:#ff7b7b;
+  --neg:#0a84ff; --pos:#ff5a5f; --ns:#48484a; --ess:#ff8a4c; --non:#0a84ff;
+  --grid:#2c2c2e; --axis:#48484a;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px rgba(0,0,0,.45);
+  --veil:rgba(11,11,13,.52);
+}
+:root[data-style="clean"] .brand { font-weight:600; letter-spacing:-.018em; }
+:root[data-style="clean"] h1 { letter-spacing:-.025em; }
+:root[data-style="clean"] .btn, :root[data-style="clean"] a.btn { border-radius:999px; }
+:root[data-style="clean"] nav.tabs button.on { background:var(--accent); color:#fff; }
+:root[data-style="clean"] nav.tabs button.on .n { background:rgba(255,255,255,.28); color:#fff; }
+
+/* ══════════════════ 4 · Plate — the arrayed heatmap: cool grid, square wells, cyan and magenta */
+:root[data-style="plate"] {
+  --bg:#eceff3; --panel:rgba(255,255,255,.93); --panel-solid:#ffffff; --surface:#ffffff;
+  --line:rgba(17,22,28,.10); --line2:rgba(17,22,28,.20);
+  --ink:#11161c; --ink2:#36414e; --muted:#5b6977; --faint:#626d78;
+  --accent:#0b6e99; --accent2:#c2255c; --accent-soft:rgba(11,110,153,.11);
+  --good:#0f8a5f; --warning:#d98a0b; --serious:#dd6b20; --critical:#c92a2a;
+  --good-ink:#0b6e4c; --warn-ink:#8a5a00; --crit-ink:#b02525;
+  --neg:#0b6e99; --pos:#c2255c; --ns:#b4c0cb; --ess:#dd6b20; --non:#0b6e99;
+  --grid:#dde3ea; --axis:#aebbc7;
+  --shadow:0 1px 1px rgba(17,22,28,.05),0 6px 20px rgba(17,22,28,.08);
+  --radius:7px; --veil:rgba(236,239,243,.58);
+  --serif:"Avenir Next","Avenir",-apple-system,sans-serif;
+}
+:root[data-style="plate"][data-theme="dark"] {
+  --bg:#0b1420; --panel:rgba(19,29,43,.88); --panel-solid:#131d2b; --surface:#101925;
+  --line:rgba(231,238,246,.10); --line2:rgba(231,238,246,.20);
+  --ink:#e7eef6; --ink2:#bfcedd; --muted:#8fa3b8; --faint:#6f8499;
+  --accent:#38bdf8; --accent2:#f472b6; --accent-soft:rgba(56,189,248,.14);
+  --good-ink:#4ade80; --warn-ink:#fbbf24; --crit-ink:#fb7185;
+  --neg:#38bdf8; --pos:#f472b6; --ns:#38485c; --ess:#fb923c; --non:#38bdf8;
+  --grid:#1b2938; --axis:#36516b;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 8px 26px rgba(0,0,0,.42);
+  --veil:rgba(11,20,32,.52);
+}
+:root[data-style="plate"] .kicker { font-family:var(--mono); letter-spacing:.16em; }
+:root[data-style="plate"] .card { border-radius:var(--radius); }
+:root[data-style="plate"] nav.tabs button.on { background:var(--accent); color:#fff; border-radius:7px; }
+:root[data-style="plate"] nav.tabs button.on .n { background:rgba(255,255,255,.26); color:#fff; border-color:transparent; }
+:root[data-style="plate"] .pill { border-radius:7px; }
+:root[data-style="plate"] .pill button { border-radius:5px; }
+
+/* ══════════════════ 5 · Contrast — for a projector or tired eyes: no translucency, no animation, heavy rules */
+:root[data-style="contrast"] {
+  --bg:#ffffff; --panel:#ffffff; --panel-solid:#ffffff; --surface:#ffffff;
+  --line:rgba(0,0,0,.30); --line2:rgba(0,0,0,.62);
+  --ink:#000000; --ink2:#141414; --muted:#2e2e2e; --faint:#4a4a4a;
+  --accent:#0040c1; --accent2:#7a1ea1; --accent-soft:rgba(0,64,193,.10);
+  --good:#006b1f; --warning:#8a5a00; --serious:#a63b00; --critical:#b00000;
+  --good-ink:#005a1a; --warn-ink:#734900; --crit-ink:#a30000;
+  --neg:#0040c1; --pos:#b00000; --ns:#767676; --ess:#a63b00; --non:#0040c1;
+  --grid:#cccccc; --axis:#000000;
+  --shadow:none; --radius:5px; --veil:transparent;
+}
+:root[data-style="contrast"][data-theme="dark"] {
+  --bg:#000000; --panel:#0c0c0c; --panel-solid:#0c0c0c; --surface:#0c0c0c;
+  --line:rgba(255,255,255,.34); --line2:rgba(255,255,255,.66);
+  --ink:#ffffff; --ink2:#ededed; --muted:#d2d2d2; --faint:#b0b0b0;
+  --accent:#ffd400; --accent2:#5ac8fa; --accent-soft:rgba(255,212,0,.14);
+  --good:#36d04a; --warning:#ffc400; --serious:#ff9442; --critical:#ff5c5c;
+  --good-ink:#4ade4a; --warn-ink:#ffc400; --crit-ink:#ff6b6b;
+  --neg:#5ac8fa; --pos:#ff5c5c; --ns:#8a8a8a; --ess:#ffd400; --non:#5ac8fa;
+  --grid:#3a3a3a; --axis:#ffffff;
+  --shadow:none; --veil:transparent;
+}
+/* the animated background is switched off here, and bg.js stops drawing it (see bg.js) */
+:root[data-style="contrast"] #bg, :root[data-style="contrast"] .veil { display:none; }
+:root[data-style="contrast"] body { font-size:15px; }
+:root[data-style="contrast"] header.top { backdrop-filter:none; -webkit-backdrop-filter:none; background:var(--bg); border-bottom:2px solid var(--line2); }
+:root[data-style="contrast"] .card { border-width:2px; }
+:root[data-style="contrast"] nav.tabs button.on { background:var(--ink); color:var(--bg); }
+:root[data-style="contrast"] nav.tabs button:focus-visible, :root[data-style="contrast"] .btn:focus-visible,
+:root[data-style="contrast"] input:focus-visible, :root[data-style="contrast"] select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+:root[data-style="contrast"] .tbl th { border-bottom-width:2px; }
+:root[data-style="contrast"] .status { border-width:2px; font-weight:650; }
+
+/* ══════════════════ the picker in the top bar */
+.stylewrap { position:relative; }
+#styleBtn { display:flex; align-items:center; gap:7px; }
+#styleBtn .sw { width:13px; height:13px; border-radius:4px; border:1px solid var(--line2);
+  background:linear-gradient(135deg,var(--accent) 50%,var(--panel-solid) 50%); }
+.stylepop { position:absolute; right:0; top:calc(100% + 8px); z-index:60; width:290px; padding:7px;
+  background:var(--panel-solid); border:1px solid var(--line2); border-radius:13px; box-shadow:var(--shadow); }
+.stylepop h4 { margin:5px 9px 7px; font:600 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--faint); }
+.stylepop button { display:flex; width:100%; gap:10px; align-items:center; text-align:left; border:0; background:none;
+  color:var(--ink); padding:7px 9px; border-radius:9px; cursor:pointer; transition:background .15s; }
+.stylepop button:hover { background:var(--accent-soft); }
+.stylepop button.on { background:var(--accent-soft); box-shadow:inset 0 0 0 1.5px var(--accent); }
+.stylepop .chips { display:flex; gap:3px; flex:0 0 auto; }
+.stylepop .chips i { width:11px; height:19px; border-radius:3px; border:1px solid rgba(128,128,128,.35); }
+.stylepop b { display:block; font-size:13px; font-weight:600; }
+.stylepop span { display:block; font-size:11.5px; color:var(--muted); line-height:1.35; }

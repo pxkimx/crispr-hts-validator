@@ -13,6 +13,21 @@
   const rnd = (n) => Math.floor(Math.random() * n);
   const seq = (n) => Array.from({ length: n }, () => NB[rnd(4)]).join("");
   const dark = () => document.documentElement.getAttribute("data-theme") === "dark";
+  // the Contrast style hides the canvas: stop animating rather than draw behind display:none
+  const off = () => document.documentElement.getAttribute("data-style") === "contrast";
+  // the guide, the scaffold and the unmatched bases take their colour from whichever style is on
+  let cG = "63,208,192", cS = "57,135,229", cO = "160,180,176";
+  function readColours() {
+    const cs = getComputedStyle(document.documentElement);
+    const rgb = (name, fallback) => {
+      const v = (cs.getPropertyValue(name) || "").trim();
+      const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v);
+      if (!m) return fallback;
+      const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+      return `${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)}`;
+    };
+    cG = rgb("--accent", cG); cS = rgb("--accent2", cS); cO = rgb("--faint", cO);
+  }
   const NBIN = 64;
 
   function newRead(anywhere) {
@@ -46,7 +61,6 @@
   function draw(now, dt) {
     const dk = dark();
     ctx.clearRect(0, 0, W, H);
-    const cG = dk ? "63,208,192" : "15,123,116", cS = dk ? "57,135,229" : "42,120,214", cO = dk ? "160,180,176" : "110,110,104";
     for (const r of reads) {
       r.x += r.v * dt;
       const cw = r.fs * 0.62;
@@ -93,12 +107,14 @@
 
   function frame(now) {
     requestAnimationFrame(frame);
-    if (document.hidden || now - last < 33) return;
+    if (document.hidden || off() || now - last < 33) return;
     const dt = Math.min(0.1, (now - (last || now)) / 1000);
     last = now;
     draw(now, dt);
   }
   window.addEventListener("resize", resize);
+  window.addEventListener("ch-style", readColours);     // the style or theme changed
+  readColours();
   resize();
   if (reduce) draw(0, 0); else requestAnimationFrame(frame);
 })();

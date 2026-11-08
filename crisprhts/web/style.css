@@ -1,6 +1,6 @@
 :root{
   --bg:#f3f4f2; --panel:rgba(252,252,251,.88); --panel-solid:#fcfcfb; --line:rgba(11,11,11,.08); --line2:rgba(11,11,11,.15);
-  --ink:#0b0b0b; --ink2:#3a3936; --muted:#5f5e5a; --faint:#898781;
+  --ink:#0b0b0b; --ink2:#3a3936; --muted:#5f5e5a; --faint:#706e69;
   --accent:#0f7b74; --accent2:#2a78d6; --accent-soft:rgba(15,123,116,.11);
   --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
   --good-ink:#006300; --warn-ink:#8a5a00; --crit-ink:#b42d2d;

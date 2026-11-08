@@ -8,8 +8,25 @@ uses (Park & Miller's Lehmer generator, stream 0, seed 123456) and are drawn in 
 """
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from scipy.special import betainc
+
+# Permutation blocks run on the performance cores, leaving the machine usable. CH_RRA_WORKERS=1 forces the
+# single-threaded path; the answers are the same either way.
+def _workers() -> int:
+    try:
+        n = int(os.environ.get("CH_RRA_WORKERS", "0"))
+    except ValueError:
+        n = 0
+    if n > 0:
+        return n
+    return max(1, min(6, (os.cpu_count() or 2) - 1))
+
+
+_WORKERS = _workers()
 
 MODULUS = 2147483647
 MULTIPLIER = 48271
@@ -50,6 +67,17 @@ class Lehmer:
     def uniform(self, n: int) -> np.ndarray:
         return self.ints(n) / MODULUS
 
+    def jumped(self, n: int) -> "Lehmer":
+        """A generator standing where this one would stand after n draws, reached without making them.
+        x_n = x_0 * 48271^n mod (2^31 - 1), so a block of the stream can be produced on its own thread and
+        the numbers are the very ones a single run would have used."""
+        g = Lehmer.__new__(Lehmer)
+        g.x = (self.x * pow(MULTIPLIER, int(n), MODULUS)) % MODULUS
+        return g
+
+    def jump(self, n: int) -> None:
+        self.x = self.jumped(n).x
+
 
 def btree_index(a: np.ndarray, v) -> np.ndarray:
     """Vector version of RRA's bTreeSearchingF: index of the element of sorted `a` nearest to v
@@ -78,18 +106,79 @@ def lo_values(pct: np.ndarray, alpha: float, min_pct: float = -1.0) -> tuple[np.
     r, k = pct.shape
     if k == 0:
         return np.ones(r), np.zeros(r, dtype=int)
-    s = np.sort(pct, axis=1)
-    out_of = (s > alpha) | (s < min_pct)
-    use = ~out_of
-    use[:, 0] = True
+    s = _sort_rows(pct, k)
     # once a guide is out of range (after the first) RRA stops; sorted order makes this a prefix
-    use = np.logical_and.accumulate(use, axis=1) | (np.arange(k) == 0)
-    rows, cols = np.nonzero(use)          # only evaluate the beta CDF where RRA does
-    f = np.full(s.shape, np.inf)
-    f[rows, cols] = betainc((cols + 1).astype(float), (k - cols).astype(float), s[rows, cols])
-    lo = np.minimum(f.min(axis=1), 1.0)
-    good = np.logical_and.accumulate(~out_of, axis=1).sum(axis=1)
-    return lo, good
+    ok = np.logical_and.accumulate((s <= alpha) & (s >= min_pct), axis=1)
+    good = ok.sum(axis=1)
+    # Column by column on contiguous memory. The earlier version evaluated the beta CDF through a
+    # (row, column) index pair over the whole matrix; gathering and scattering those scattered cells cost
+    # several times the arithmetic itself. Results are unchanged, bit for bit.
+    lo = s[:, 0].copy() if k == 1 else betainc(1.0, float(k), s[:, 0])   # betainc(1,1,x) is exactly x
+    for i in range(1, k):
+        m = ok[:, i]
+        if not m.any():                   # prefix mask: every later column is empty too
+            break
+        v = betainc(i + 1.0, float(k - i), s[:, i][m])
+        cur = lo[m]
+        lo[m] = np.where(v < cur, v, cur)
+    return np.minimum(lo, 1.0), good
+
+
+def _sort_rows(a: np.ndarray, k: int) -> np.ndarray:
+    """Sort each row. Nearly every gene has 1-6 guides, and for those a sorting network of min/max beats
+    np.sort, which pays a per-row overhead it cannot amortise over so few elements."""
+    if k == 1:
+        return a
+    if k == 2:
+        x, y = a[:, 0], a[:, 1]
+        return np.stack([np.minimum(x, y), np.maximum(x, y)], axis=1)
+    if k == 3:
+        x, y, z = a[:, 0], a[:, 1], a[:, 2]
+        lo1, hi1 = np.minimum(x, y), np.maximum(x, y)
+        return np.stack([np.minimum(lo1, z), np.minimum(hi1, np.maximum(lo1, z)), np.maximum(hi1, z)], axis=1)
+    if k == 4:
+        x, y, z, w = a[:, 0], a[:, 1], a[:, 2], a[:, 3]
+        l1, h1 = np.minimum(x, y), np.maximum(x, y)
+        l2, h2 = np.minimum(z, w), np.maximum(z, w)
+        m1, m2 = np.maximum(l1, l2), np.minimum(h1, h2)
+        return np.stack([np.minimum(l1, l2), np.minimum(m1, m2), np.maximum(m1, m2), np.maximum(h1, h2)], axis=1)
+    return np.sort(a, axis=1)
+
+
+def _null_lo(k: int, alpha: float, nrand: int, rng: "Lehmer", null) -> np.ndarray:
+    """The lo-values of `nrand` random genes with k guides each — the null a gene's score is ranked against.
+
+    This is where nearly all the time goes on a genome-wide screen, and it is dominated by the few genes with
+    many guides: one gene with 94 guides needs as much work as all 17,000 genes with four. The blocks are
+    independent, so they run on several threads; each starts from the generator state it would have reached by
+    drawing in turn (Lehmer.jumped), so the numbers, and the p-values, are exactly those of a single-threaded
+    run. NumPy releases the interpreter lock inside the sort, the comparisons and the beta CDF, which is where
+    the time is spent.
+    """
+    chunk = max(1, 2_000_000 // k)
+    spans = [(s0, min(chunk, nrand - s0)) for s0 in range(0, nrand, chunk)]
+    rl = np.empty(nrand)
+    base = Lehmer.__new__(Lehmer)
+    base.x = rng.x
+
+    def block(span):
+        s0, m = span
+        u = base.jumped(s0 * k).uniform(m * k).reshape(m, k)
+        if null is not None:
+            ix = np.minimum((len(null) * u).astype(np.int64), len(null) - 1)
+            u = null[ix]
+        rl[s0:s0 + m] = lo_values(u, alpha)[0]      # disjoint slices: no two blocks touch the same cells
+
+    workers = min(len(spans), _WORKERS)
+    if workers > 1:
+        with ThreadPoolExecutor(workers) as pool:
+            for _ in pool.map(block, spans):
+                pass
+    else:
+        for span in spans:
+            block(span)
+    rng.jump(nrand * k)      # leave the stream where drawing one after another would have left it
+    return rl
 
 
 def bh_fdr(p: np.ndarray) -> np.ndarray:
@@ -175,15 +264,7 @@ def rra(scores, genes, alpha: float, control_mask=None, guide_names=None, skip_g
     ks = sorted(set(int(x) for x in sizes[~skip]))
     for step, k in enumerate(ks):
         if k <= max_guides_permuted:
-            rl = np.empty(nrand)
-            chunk = max(1, 2_000_000 // k)
-            for s0 in range(0, nrand, chunk):
-                m = min(chunk, nrand - s0)
-                u = rng.uniform(m * k).reshape(m, k)
-                if null is not None:
-                    ix = np.minimum((len(null) * u).astype(np.int64), len(null) - 1)
-                    u = null[ix]
-                rl[s0:s0 + m] = lo_values(u, alpha)[0]
+            rl = _null_lo(k, alpha, nrand, rng, null)
             rl.sort()
             last = rl
         if last is None:

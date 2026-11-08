@@ -10,9 +10,12 @@
 (function(){var d=document.documentElement,t="dark";try{var s=localStorage.getItem("ch-theme");if(s==="light"||s==="dark")t=s;
 var a=new URLSearchParams(location.search).get("appearance");if(a==="light"||a==="dark"){t=a;localStorage.setItem("ch-theme",a)}}catch(e){}
 d.setAttribute("data-theme",t);
+/* Style: one of five looks, remembered per tool and applied before first paint so there is no flash */
+try{var y=localStorage.getItem("ch-style");if(["sequencer","paper","clean","plate","contrast"].indexOf(y)>=0)d.setAttribute("data-style",y);else d.setAttribute("data-style","sequencer")}catch(e){d.setAttribute("data-style","sequencer")}
 window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolbox-appearance"&&(m.appearance==="light"||m.appearance==="dark")){if(window.setTheme)window.setTheme(m.appearance);else{d.setAttribute("data-theme",m.appearance);try{localStorage.setItem("ch-theme",m.appearance)}catch(_){}}}});})();
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
@@ -30,6 +33,10 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
       <button data-p="methods">Methods</button>
     </nav>
     <div class="readout" id="readout" title="Loaded screen">—</div>
+    <div class="stylewrap">
+      <button class="btn sm" id="styleBtn" aria-haspopup="true" aria-expanded="false" title="Choose a look"><i class="sw"></i>Style</button>
+      <div class="stylepop hidden" id="stylePop" role="menu" aria-label="App style"></div>
+    </div>
     <div class="pill" id="themePill" role="group" aria-label="Theme">
       <button data-t="light" title="Light"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>Light</button>
       <button data-t="dark" title="Dark"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark</button>

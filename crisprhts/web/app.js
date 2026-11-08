@@ -31,11 +31,51 @@ $$("#modePill button").forEach((b) => (b.onclick = () => setMode(b.dataset.m)));
 /* ---------------- quit when the window closes (server holds this stream) */
 try { new EventSource("/api/window"); } catch (e) {}
 
-/* ---------------- theme */
+/* ---------------- style and theme */
+const STYLES = [
+  { k: "sequencer", name: "Sequencer", about: "The original: deep teal, instrument readouts, reads drifting behind the page.", sw: ["#081413", "#3fd0c0", "#3987e5"] },
+  { k: "paper", name: "Paper", about: "A journal page \u2014 warm stock, serif headings, hairline rules. Good for figures you will paste into a manuscript.", sw: ["#f7f5ef", "#2f4858", "#9c4221"] },
+  { k: "clean", name: "Clean", about: "Apple-like: soft greys, one blue, generous rounding.", sw: ["#f5f5f7", "#0071e3", "#1d1d1f"] },
+  { k: "plate", name: "Plate", about: "After the arrayed heatmaps: cool grid, square wells, cyan and magenta.", sw: ["#eceff3", "#0b6e99", "#c2255c"] },
+  { k: "contrast", name: "Contrast", about: "For a projector or tired eyes: heavy rules, no translucency, no background animation.", sw: ["#ffffff", "#0040c1", "#000000"] },
+];
+const styleOf = () => document.documentElement.getAttribute("data-style") || "sequencer";
+window.setStyle = function (k) {
+  if (!STYLES.some((s) => s.k === k)) return;
+  document.documentElement.setAttribute("data-style", k);
+  try { localStorage.setItem("ch-style", k); } catch (e) {}
+  renderStyleMenu();
+  window.dispatchEvent(new Event("ch-style"));     // the background animation listens
+  redraw();                                        // charts read the colours from CSS at draw time
+};
+function renderStyleMenu() {
+  const cur = styleOf();
+  $("#stylePop").innerHTML = "<h4>App style</h4>" + STYLES.map((s) =>
+    `<button role="menuitemradio" aria-checked="${s.k === cur}" class="${s.k === cur ? "on" : ""}" data-style="${s.k}">
+       <span class="chips">${s.sw.map((c) => `<i style="background:${c}"></i>`).join("")}</span>
+       <span><b>${esc(s.name)}</b><span>${esc(s.about)}</span></span>
+     </button>`).join("");
+  $$("#stylePop [data-style]").forEach((b) => (b.onclick = () => { setStyle(b.dataset.style); closeStyleMenu(); }));
+}
+function closeStyleMenu() {
+  $("#stylePop").classList.add("hidden");
+  $("#styleBtn").setAttribute("aria-expanded", "false");
+}
+$("#styleBtn").onclick = (e) => {
+  e.stopPropagation();
+  const open = $("#stylePop").classList.toggle("hidden");
+  $("#styleBtn").setAttribute("aria-expanded", String(!open));
+  if (!open) renderStyleMenu();
+};
+document.addEventListener("click", (e) => { if (!e.target.closest(".stylewrap")) closeStyleMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeStyleMenu(); });
+renderStyleMenu();
+
 window.setTheme = function (t) {
   document.documentElement.setAttribute("data-theme", t);
   try { localStorage.setItem("ch-theme", t); } catch (e) {}
   $$("#themePill button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
+  window.dispatchEvent(new Event("ch-style"));
   redraw();
 };
 $$("#themePill button").forEach((b) => (b.onclick = () => setTheme(b.dataset.t)));
@@ -531,6 +571,7 @@ function renderMethods() {
   <div class="card"><h3>Guide test (MAGeCK-style)</h3><p>Control and treatment means are the medians of normalised replicate counts. Variance comes from a mean–variance model, log₂(var − mean + 1) = k·log₂(mean + 1) + b, fitted on the control replicates (all samples when there is one control). The p-value for depletion or enrichment uses a normal distribution truncated at zero, as MAGeCK 0.5.9.5 ships; guide scores are the normal quantiles of the depletion p-value. Guide LFC = log₂(treatment + 1) − log₂(control + 1).</p></div>
   <div class="card"><h3>Gene test (α-RRA)</h3><p>Guides are ranked by score; each gene takes the smallest beta-distribution probability of its top guides that fall under α (α = fraction of guides with p ≤ 0.25, kept between 0.05 and 0.5 for depletion). Gene p-values come from scoring random guide sets of the same size (≥ 100,000 draws, using MAGeCK's own random-number generator and seed, so results are reproducible); FDR by Benjamini–Hochberg. Gene LFC = median of its guides.</p></div>
   <div class="card"><h3>Quality checks — defaults (to confirm)</h3><ul>${thList}</ul><p class="small muted">Essential genes: CEGv2 (684) and non-essential NEGv1 (927) human gene lists from the Hart lab BAGEL repository (MIT licence).</p></div>
+  <div class="card"><h3>Speed</h3><p>The gene test is the slow step, and almost all of it is the permutation null that turns a gene's score into a p-value. The cost is set by the genes with the most guides, not by how many genes there are: in the TKOv3 example one gene with 94 guides takes longer than all 17,247 genes with four. Those permutations run on several of the Mac's cores. Each block starts from the state the random-number generator would have reached by drawing its way there, so the numbers used, and the p-values, are exactly those of a single-threaded run; set <code>CH_RRA_WORKERS=1</code> to force one core and compare. A genome-wide test on TKOv3 takes about 6 seconds.</p></div>
   <div class="card"><h3>Thresholds</h3><p>Every pass / warn / fail line is a scientific choice, not a fact. The defaults follow published guidance and were confirmed for this tool on 7 November 2026: <b>300 / 100</b> reads per guide; <b>80% / 65%</b> mapped reads; Gini <b>0.10 / 0.20</b> at baseline and 0.20 / 0.30 later; zero-count guides <b>1% / 5%</b> in the reference and 5% / 15% later; library skew (90/10) <b>10 / 20</b>; replicate Pearson r <b>0.60 / 0.40</b>, with Spearman shown beside it; essential-gene AUC <b>0.90 / 0.80</b>; representation <b>500× / 200×</b> cells per guide; MOI <b>0.4 / 0.6</b>; <b>4 / 2</b> guides per gene; <b>100 / 20</b> non-targeting controls. For arrayed screens: plate median ratio 2 / 5, Z′ 0.5 / 0, |SSMD| 3 / 2, edge effect 10% / 20%, row and column share 10% / 25%, replicate r 0.70 / 0.40; the default normalisation is <b>robust z</b> and a well is a hit when its combined score passes <b>2</b> and every replicate also passes <b>1</b>. Change any of them under <i>Thresholds</i> on the Quality page (pooled and arrayed screens each have their own panel): a box you change is kept for next time on this Mac, and <i>Restore defaults</i> puts them all back.</p></div>
   <div class="card"><h3>Screen design: representation and MOI</h3><p>Cells per guide = the cells you enter for each step ÷ the guides in the library. At least 500 cells per guide is expected at every step (transduction, the tightest passage, harvest): below that, guides disappear because too few cells carried them, which looks exactly like a real dropout afterwards and cannot be fixed by sequencing more deeply. MOI about 0.3 keeps one guide per cell; the app shows the Poisson fraction of transduced cells carrying exactly one guide, so you can see what a higher MOI costs. These are the numbers you enter on the Samples page — the app cannot read them from the counts (to confirm: 500× pass, 200× fail; MOI 0.4 pass, 0.6 fail).</p></div>
   <div class="card"><h3>Guides per gene and non-targeting controls</h3><p>Guides per gene is counted over targeting guides only; genes with fewer than four are listed, because a gene score built on one or two guides cannot tell a real effect from one bad guide. Non-targeting controls are found by name (non-targeting, NTC, safe-harbour, EGFP, LacZ, luciferase, AAVS1, or your own pattern). They should sit at a log₂ fold change of zero: a shift means the whole library moved, which is a normalisation problem rather than biology. Their robust spread (IQR ÷ 1.349) is the noise floor, reported as the smallest gene effect that can be told apart from no effect.</p></div>

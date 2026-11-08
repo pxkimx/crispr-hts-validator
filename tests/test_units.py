@@ -259,3 +259,46 @@ def test_fastq_counting_offsets_mismatch_and_reverse(tmp_path):
     rc.write_text("".join(f"@r{i}\n{count.revcomp(x)}\n+\n{'I' * len(x)}\n" for i, x in enumerate(reads)))
     r = count.count_fastq(rc, lib, "s")
     assert r.reverse and r.counts.tolist() == [5, 3, 0]
+
+
+# ------------------------------------------------------------------ version 1.4: the permutation runs in parallel
+def test_jump_ahead_reproduces_the_random_stream():
+    """The permutation blocks start from a jumped generator state instead of drawing their way there."""
+    from crisprhts.rra import Lehmer
+    straight = Lehmer(123456).uniform(200000)
+    base = Lehmer(123456)
+    blocks = np.concatenate([base.jumped(s).uniform(min(4321, 200000 - s)) for s in range(0, 200000, 4321)])
+    assert np.array_equal(straight, blocks)
+    a, b = Lehmer(99), Lehmer(99)
+    a.uniform(54321)
+    b.jump(54321)
+    assert a.x == b.x and np.array_equal(a.uniform(10), b.uniform(10))
+
+
+def test_parallel_and_single_threaded_rra_agree_exactly():
+    from crisprhts import rra
+    rng = np.random.default_rng(3)
+    genes = np.repeat([f"G{i}" for i in range(400)], 4)
+    genes = np.concatenate([genes, np.repeat("BIG", 40)])          # one gene with many guides, the slow case
+    scores = rng.random(len(genes))
+    kw = dict(alpha=0.25, permutations=20)
+    old = rra._WORKERS
+    try:
+        rra._WORKERS = 1
+        a = rra.rra(scores, genes, **kw)
+        rra._WORKERS = 4
+        b = rra.rra(scores, genes, **kw)
+    finally:
+        rra._WORKERS = old
+    for key in ("lo", "p", "fdr", "good", "n"):
+        assert np.array_equal(a[key], b[key]), key
+    assert list(a["gene"]) == list(b["gene"])
+
+
+def test_lo_values_small_k_sorting_network_matches_a_full_sort():
+    from crisprhts.rra import _sort_rows
+    rng = np.random.default_rng(5)
+    for k in (1, 2, 3, 4, 5, 9):
+        x = rng.random((500, k))
+        x[rng.random(x.shape) < 0.2] = 0.5                          # plenty of ties
+        assert np.array_equal(_sort_rows(x, k), np.sort(x, axis=1)), k
