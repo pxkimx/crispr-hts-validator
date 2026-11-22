@@ -30,6 +30,7 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
       <button data-p="quality"><span class="n">3</span>Quality<i class="dot" id="qcDot"></i></button>
       <button data-p="analyse"><span class="n">4</span>Analyse</button>
       <button data-p="results"><span class="n">5</span><span class="lbl">Results</span></button>
+      <button data-p="compare" class="hidden"><span class="lbl">Compare</span></button>
       <button data-p="methods">Methods</button>
     </nav>
     <div class="readout" id="readout" title="Loaded screen">—</div>
@@ -156,6 +157,43 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
     </div>
   </div>
   <div class="row mt"><span class="spacer"></span><button class="btn primary" id="amSave">Save and check the plates →</button></div>
+</section>
+
+<!-- ======================== POOLED: COMPARE TWO SCREENS ======================== -->
+<section class="page" id="p-compare">
+  <div class="kicker">Two screens</div>
+  <h1>Compare</h1>
+  <p class="lede">Put two screens of the same library side by side and see which dependencies they share and which belong to one of them — a cell line against its isogenic control, or treated against untreated. Each screen keeps its own reference sample, and both are placed on one scale before anything is subtracted.</p>
+  <div class="empty" id="cmpEmpty">Set up at least two comparisons on the Samples page first.</div>
+  <div id="cmpBody" class="hidden">
+    <div class="card">
+      <div class="grid g2s">
+        <div><label class="small">Screen A<select id="cmpA"></select></label></div>
+        <div><label class="small">Screen B<select id="cmpB"></select></label></div>
+      </div>
+      <div class="row mt" id="cmpTh"></div>
+      <div class="row mt"><span class="muted small">Thresholds are scientific choices — they are kept for next time, and Methods explains each one.</span><span class="spacer"></span><button class="btn primary" id="cmpRun">Compare →</button></div>
+    </div>
+    <div id="cmpResult" class="hidden">
+      <div class="card mt row small" id="cmpQuality"></div>
+      <div class="grid g4 mt" id="cmpTiles"></div>
+      <div class="grid g2 mt">
+        <div class="card chart-card"><div class="row"><h3>Screen against screen</h3><span class="spacer"></span><span class="faint small">scaled effect, −1 = median core-essential gene</span></div><div class="plot" id="cmpScatter"></div></div>
+        <div class="card chart-card"><div class="row"><h3>What differs</h3><span class="spacer"></span><span class="faint small">Δ against FDR</span></div><div class="plot" id="cmpVolcano"></div></div>
+      </div>
+      <div class="grid g2s mt">
+        <div class="card">
+          <div class="row"><h3>Genes</h3><span class="spacer"></span><span class="muted small" id="cmpCount"></span><input type="text" id="cmpSearch" placeholder="Search gene…" size="16"><a class="btn sm" href="/api/export?what=comparison&amp;fmt=csv" download>CSV</a></div>
+          <div class="scroll tall"><table class="tbl" id="cmpTable"></table></div>
+        </div>
+        <div>
+          <div class="card" id="cmpGene"><span class="muted">Click a gene to see every guide in both screens.</span></div>
+          <div class="card mt" id="cmpConc"></div>
+        </div>
+      </div>
+      <div class="card mt small muted" id="cmpNotes"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ======================== ARRAYED: QUALITY ======================== -->
@@ -376,5 +414,6 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
 <script src="app.js"></script>
 <script src="arrayed.js"></script>
 <script src="methods.js"></script>
+<script src="compare.js"></script>
 </body>
 </html>

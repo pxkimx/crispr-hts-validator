@@ -132,6 +132,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(lambda: P.qc or {"error": "Run the quality checks first."})
         if u.path == "/api/result":
             return self._guard(lambda: P.result(q.get("name", "")))
+        if u.path == "/api/compare":
+            return self._guard(lambda: P.comparison_view(q.get("search", ""), int(q.get("limit", 400))))
+        if u.path == "/api/compare/gene":
+            return self._guard(lambda: P.comparison_gene(q.get("gene", "")))
         if u.path == "/api/gene":
             return self._guard(lambda: P.gene(q.get("name", ""), q.get("gene", "")))
         if u.path == "/api/a/state":
@@ -241,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(rt)
         if u.path == "/api/qc":
             return self._guard(lambda: P.run_qc(d.get("thresholds")))
+        if u.path == "/api/compare":
+            return self._guard(lambda: P.run_compare(d))
         if u.path == "/api/analyse":
             return self._guard(lambda: P.run_analysis(d))
         if u.path == "/api/controls":

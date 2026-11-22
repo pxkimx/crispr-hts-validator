@@ -32,6 +32,10 @@ _PDF_CHARS = str.maketrans({
     "−": "-",              # a true minus sign
     "′": "'",              # prime, as in Z'
     "→": "-&gt;",
+    # Helvetica has no Delta; the Symbol-font substitution draws a missing-glyph box inside table cells,
+    # so the word is used instead. Figures are drawn by matplotlib, which embeds a font that has it.
+    "Δ": "delta ",
+    "∆": "delta ",
 })
 
 
@@ -44,7 +48,8 @@ def plain(text: str) -> str:
     """The same, for text drawn straight onto the canvas, which takes no markup."""
     return (str(text).replace("≥", ">=").replace("≤", "<=").replace("₂", "2")
             .replace("²", "2").replace("α", "alpha").replace("ρ", "rho")
-            .replace("−", "-").replace("′", "'").replace("→", "->"))
+            .replace("−", "-").replace("′", "'").replace("→", "->")
+            .replace("Δ", "delta").replace("∆", "delta"))
 
 from . import __version__  # noqa: E402
 
@@ -184,6 +189,9 @@ def pooled_report(P) -> bytes:
     for nm, entry in P.results.items():
         s.append(PageBreak())
         _pooled_result(s, nm, entry, P, st)
+    if getattr(P, "comparison", None):
+        s.append(PageBreak())
+        _comparison_section(s, P.comparison, st)
     s.append(PageBreak())
     s.append(Paragraph("Methods", st["h2"]))
     for txt in METHODS_POOLED:
@@ -191,6 +199,81 @@ def pooled_report(P) -> bytes:
         s.append(Spacer(1, 3))
     doc.build(s, onFirstPage=_footer(name), onLaterPages=_footer(name))
     return buf.getvalue()
+
+
+def _comparison_section(s, c, st):
+    """Two screens side by side: the scatter, what differs, and the genes that separate them."""
+    a, b = c["a"], c["b"]
+    con, th = c["concordance"], c["thresholds"]
+    s.append(Paragraph("TWO SCREENS COMPARED", st["kick"]))
+    s.append(Paragraph(f"{a['name']} against {b['name']}", st["h2"]))
+    scaled = a["scale"].get("ok") and b["scale"].get("ok")
+    s.append(Paragraph(
+        (f"Each screen is measured against its own reference"
+         + (" (both share one reference sample)." if c["shared_reference"] else ".")
+         + (" Both are then placed on one scale, with the median core-essential gene at \u22121 and the median "
+            f"non-essential gene at 0 ({c['species']} reference sets), so the two can be subtracted."
+            if scaled else
+            " <b>Neither screen could be placed on the common scale</b> (too few reference essential or "
+            "non-essential genes), so the values below are raw log2 fold changes and are not comparable "
+            "between screens.")
+         + f" Run {c['when']}."), st["small"]))
+
+    for q in c.get("quality", []):
+        if q["status"] != "pass":
+            s.append(Paragraph(
+                f"<b>Note.</b> {q['comparison']} separates essential from non-essential genes poorly "
+                f"(AUC {q['auc']:.3f}), so differences involving it should not be trusted; an early timepoint "
+                "usually looks like this.", st["small"]))
+
+    rows = [["", "Count", "What it means"],
+            ["Shared dependencies", f"{con['dep_both']:,}",
+             f"needed by both ({con['dep_a']:,} in A, {con['dep_b']:,} in B)"],
+            ["Specific to A, significant", f"{con['n_specific_a']:,}",
+             f"a dependency in {a['name']} only, and the difference passes the test"],
+            ["Specific to B, significant", f"{con['n_specific_b']:,}",
+             f"a dependency in {b['name']} only, and the difference passes the test"],
+            ["Shared but deeper", f"{con.get('n_shared_stronger', 0):,}", "needed by both, significantly more by one"],
+            ["Agreement", f"r {con['pearson']:.3f}", f"Spearman {con['spearman']:.3f}, dependencies shared (Jaccard) {con['jaccard']:.3f}"]]
+    s.append(_table(rows, [42 * mm, 24 * mm, W - 66 * mm], st))
+    s.append(Spacer(1, 6))
+    s.append(Paragraph(f"A gene counts as a dependency at a scaled effect of {th['cmp_dependency']} or below. "
+                       f"A difference is called at FDR \u2264 {th['cmp_fdr']} with an absolute change of at least "
+                       f"{th['cmp_min_delta']}, over genes with at least {th['cmp_min_guides']} guides.", st["small"]))
+
+    g = c["genes"]
+    fig, ax = plt.subplots(1, 2, figsize=(7.1, 3.1))
+    col = {"shared": "#eb6834", "specific to A": "#2a78d6", "specific to B": "#e34948", "neither": "#c2c1ba"}
+    for call, grp in g.groupby("call"):
+        ax[0].scatter(grp["scaled_a"], grp["scaled_b"], s=3, lw=0, alpha=.7,
+                      c=col.get(call, "#999"),
+                      label=f"{'dependency in A only' if call == 'specific to A' else 'dependency in B only' if call == 'specific to B' else call} ({len(grp):,})")
+    lim = [min(g["scaled_a"].min(), g["scaled_b"].min()), max(g["scaled_a"].max(), g["scaled_b"].max())]
+    ax[0].plot(lim, lim, lw=.7, ls="--", c="#999")
+    ax[0].set_xlabel(f"{a['name']} \u2014 scaled effect"); ax[0].set_ylabel(f"{b['name']} \u2014 scaled effect")
+    ax[0].legend(fontsize=5.5, markerscale=2, frameon=False, loc="upper left")
+    y = -np.log10(np.maximum(g["fdr"].to_numpy(), 1e-300))
+    ax[1].scatter(g["delta"], y, s=3, lw=0, alpha=.6,
+                  c=np.where(g["different"], np.where(g["delta"] < 0, "#e34948", "#2a78d6"), "#c2c1ba"))
+    ax[1].axvline(0, lw=.7, ls="--", c="#999")
+    ax[1].set_xlabel(f"\u0394 scaled effect ({b['name']} \u2212 {a['name']})"); ax[1].set_ylabel("\u2212log10 FDR")
+    for axis in ax:
+        axis.tick_params(labelsize=6)
+        axis.xaxis.label.set_size(6.5); axis.yaxis.label.set_size(6.5)
+    fig.tight_layout()
+    s.append(_fig(fig))
+
+    top = g[g["different"]].reindex(g[g["different"]]["delta"].abs().sort_values(ascending=False).index).head(20)
+    if len(top):
+        tr = [["Gene", "Guides", "A", "B", "Change", "FDR", "Needed by"]]
+        for r in top.itertuples():
+            tr.append([r.gene, str(r.guides), f"{r.scaled_a:.2f}", f"{r.scaled_b:.2f}", f"{r.delta:+.2f}",
+                       f"{r.fdr:.2g}", r.call + (f" (more in {r.stronger_in})" if r.stronger_in else "")])
+        s.append(KeepTogether([Paragraph("The 20 biggest differences", st["h3"]),
+                               _table(tr, [30 * mm, 15 * mm, 16 * mm, 16 * mm, 16 * mm, 20 * mm, W - 113 * mm], st)]))
+    else:
+        s.append(Paragraph("No gene met both the FDR and the size threshold: on these settings the two screens "
+                           "do not differ.", st["p"]))
 
 
 def _pooled_qc_figs(q):
@@ -332,6 +415,15 @@ METHODS_POOLED = [
     "p(1)/p(\u22651) at the MOI entered (Joung et al., Nat Protoc 2017; Doench, Nat Rev Genet 2018).",
     "<b>Guides per gene.</b> Counted over targeting guides only; genes with fewer than four independent guides are "
     "listed, since a gene-level score built on one or two guides cannot separate a real effect from a bad guide.",
+    "<b>Comparing two screens.</b> Each screen is measured against its own reference. A gene's effect is the "
+    "median of its guides, and each screen is then scaled so that the median core-essential gene (CEGv2) sits "
+    "at -1 and the median non-essential gene (NEGv1) at 0, which removes the difference in dynamic range that "
+    "timepoint, cell line and read depth introduce (Hart et al. 2015; the same idea as CERES and Chronos). The "
+    "differential test works guide by guide, so each guide's own efficiency cancels: the difference B - A is "
+    "turned into a z-score against an empirical null estimated in a sliding window of guides ordered by "
+    "abundance, exactly as drugZ does, and combined per gene as sumZ / sqrt(n), with a two-sided normal "
+    "p-value and Benjamini-Hochberg FDR. When both screens share one reference sample this asks drugZ's "
+    "question by another route and ranks genes the same way.",
     "<b>Non-targeting controls.</b> Control guides are found by name (non-targeting, NTC, safe-harbour, EGFP, LacZ, "
     "luciferase, AAVS1, or a pattern you set). Their median log2 fold change should be zero; their robust standard "
     "deviation (IQR/1.349) gives the noise floor quoted as the smallest distinguishable effect.",

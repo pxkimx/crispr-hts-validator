@@ -90,6 +90,27 @@ projector or tired eyes). Each works in light and dark, so the ☀ Light | ☾ D
 text colour in all ten combinations clears the 4.5:1 contrast ratio. Charts and the background animation take
 their colours from whichever style is on.
 
+## Comparing two screens (version 1.5)
+
+Put two of the project's comparisons side by side — a cell line against its isogenic control, or treated
+against untreated — and see which dependencies they share and which belong to one of them.
+
+- Each screen keeps **its own reference** sample, so a two-arm experiment is compared the way it was run.
+- Both are put on **one scale** before anything is subtracted: the median core-essential gene (CEGv2) at −1 and
+  the median non-essential gene (NEGv1) at 0, which removes the difference in dynamic range that timepoint,
+  cell line and depth introduce. A screen without enough reference genes is said to be unscaled, not scaled
+  silently.
+- The **differential test** works guide by guide, so each guide's own efficiency cancels: the difference is
+  z-scored against an empirical null estimated in a sliding window of guides ordered by abundance (drugZ's
+  method), combined per gene as sumZ / √n, two-sided, with Benjamini–Hochberg FDR.
+- **Views**: screen against screen, a differential volcano, a concordance summary (Pearson, Spearman, shared
+  dependencies by Jaccard), a sortable gene table with search, and every guide of a chosen gene in both screens.
+- **Quality gate**: each screen's essential-gene separation is shown beside the result, with a plain warning
+  when one of them is too weak to trust — an early timepoint looks like this.
+- **Built-in example**: the HAP1 TKOv3 screen at T18 against T18 starved. It finds 30 starvation-specific
+  dependencies led by TSC2, TSC1 and KEAP1, and 36 shared ones that deepen under starvation.
+- Exports to CSV, a sheet in the Excel workbook, and a section in the PDF report.
+
 ## Thresholds
 
 Every pass / warn / fail line is a scientific choice. The defaults follow published guidance and were confirmed on

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import __version__, cnv, count, enrichment, pooled_io, pooled_methods, pooled_stats, prefs, qc
+from . import __version__, cnv, compare, count, enrichment, pooled_io, pooled_methods, pooled_stats, prefs, qc
 
 HOME = Path.home() / "Library" / "Application Support" / "CRISPR HTS Validator"
 UPLOADS_ROOT = HOME / "uploads"
@@ -119,6 +119,7 @@ class Project:
         self.jobs: dict[str, Job] = {}
         self.thresholds: dict = prefs.get("pooled_thresholds", qc.THRESHOLDS)   # the user's own, kept between sessions
         self.screen: dict = {}        # experiment numbers: cells per guide, MOI, selection (see SCREEN_FIELDS)
+        self.comparison: dict | None = None   # the last two-screen comparison (see run_compare)
         self.positions: pd.DataFrame | None = None
         self.positions_name = ""
 
@@ -375,6 +376,80 @@ class Project:
             self.qc = r
         return self.start("qc", work)
 
+    # ---- comparing two screens
+    def compare_thresholds(self) -> dict:
+        return {**compare.DEFAULTS, **prefs.get("compare_thresholds", compare.DEFAULTS)}
+
+    def run_compare(self, opts: dict) -> dict:
+        """Compare two of this project's comparisons. Both are measured against their own reference, so an
+        experiment with one arm per cell line is compared the way it was run."""
+        if not self.table:
+            raise ValueError("Load data first.")
+        by_name = {c["name"]: c for c in self.design["comparisons"]}
+        a, b = opts.get("a"), opts.get("b")
+        if a not in by_name or b not in by_name:
+            raise ValueError("Pick two comparisons from the Samples page.")
+        if a == b:
+            raise ValueError("Pick two different comparisons.")
+        th = {k: float(v) for k, v in (opts.get("thresholds") or {}).items() if k in compare.DEFAULTS}
+        if th:
+            prefs.set("compare_thresholds", th, compare.DEFAULTS)
+        th = self.compare_thresholds()
+
+        def work(job: Job):
+            job.message = f"Comparing {a} with {b}\u2026"
+            t = self.table
+            r = compare.compare(t.counts, t.guides, t.genes, t.samples, by_name[a], by_name[b],
+                                thresholds=th)
+            r["quality"] = compare.quality_note(self.qc, by_name[a], by_name[b])
+            r["when"] = time.strftime("%Y-%m-%d %H:%M")
+            with self.lock:
+                self.comparison = r
+        return self.start("compare", work)
+
+    def comparison_view(self, search: str = "", limit: int = 400) -> dict:
+        c = self.comparison
+        if not c:
+            raise ValueError("Run a comparison first.")
+        g = c["genes"]
+        if search:
+            g = g[g["gene"].str.contains(re.escape(search), case=False, regex=True)]
+        shown = g.head(limit)
+        pts = c["genes"]
+        return {
+            "a": c["a"], "b": c["b"], "species": c["species"], "when": c["when"],
+            "thresholds": c["thresholds"], "concordance": c["concordance"],
+            "quality": c["quality"], "shared_reference": c["shared_reference"],
+            "columns": ["gene", "guides", "scaled_a", "scaled_b", "delta", "normZ", "p", "fdr",
+                        "agreement", "call", "stronger_in"],
+            "rows": shown[["gene", "guides", "scaled_a", "scaled_b", "delta", "normZ", "p", "fdr",
+                           "agreement", "call", "stronger_in"]].to_dict("split")["data"],
+            "total": int(len(g)),
+            "points": [[r.gene, round(float(r.scaled_a), 4), round(float(r.scaled_b), 4),
+                        round(float(r.delta), 4), float(r.fdr), r.call, bool(r.different)]
+                       for r in pts.itertuples()],
+        }
+
+    def comparison_gene(self, gene: str) -> dict:
+        c = self.comparison
+        if not c:
+            raise ValueError("Run a comparison first.")
+        row = c["genes"][c["genes"]["gene"] == gene]
+        if row.empty:
+            raise ValueError(f"{gene} is not in the comparison.")
+        gd = c["guide"][c["guide"]["gene"] == gene]
+        return {"gene": gene, "summary": row.iloc[0].to_dict(),
+                "guides": gd[["guide", "lfc_a", "lfc_b", "delta_guide", "z"]].round(4).to_dict("records"),
+                "a": c["a"]["name"], "b": c["b"]["name"]}
+
+    def comparison_frame(self) -> pd.DataFrame:
+        if not self.comparison:
+            raise ValueError("Run a comparison first.")
+        g = self.comparison["genes"].copy()
+        g.insert(1, "screen_a", self.comparison["a"]["name"])
+        g.insert(2, "screen_b", self.comparison["b"]["name"])
+        return g
+
     # ---- analysis
     def control_mask(self, how: str, pattern: str = "", genes_text: str = "") -> np.ndarray | None:
         if not self.table:
@@ -476,6 +551,9 @@ class Project:
                "enrichment": {k: enrichment.COLLECTIONS[k] for k in enrichment.COLLECTIONS},
                "norm_methods": pooled_stats.NORM_METHODS, "control_pattern": CONTROL_PATTERN,
                "screen": self.screen, "screen_fields": SCREEN_FIELDS,
+               "has_comparison": self.comparison is not None,
+               "compare_thresholds": self.compare_thresholds(),
+               "compare_defaults": dict(compare.DEFAULTS),
                "jobs": [j.public() for j in self.jobs.values() if j.state == "running"]}
         if self.library:
             out["library"] = {"guides": len(self.library.ids), "genes": len(set(self.library.genes)),
@@ -618,7 +696,9 @@ class Project:
 
     def export(self, what: str, name: str = "", fmt: str = "csv") -> tuple[bytes, str, str]:
         safe = re.sub(r"[^\w.+-]+", "_", name or self.name or "screen").strip("_") or "screen"
-        if what == "genes":
+        if what == "comparison":
+            df, fn = self.comparison_frame(), f"{safe}.comparison"
+        elif what == "genes":
             df, fn = self.gene_frame(name), f"{safe}.gene_summary"
         elif what == "guides":
             df, fn = self.guide_frame(name), f"{safe}.sgrna_summary"
@@ -650,6 +730,8 @@ class Project:
                 self.qc_frame().to_excel(xw, index=False, sheet_name="qc")
             for k in self.results:
                 self.gene_frame(k).to_excel(xw, index=False, sheet_name=re.sub(r"[\[\]:*?/\\]", "_", "genes " + k)[:31])
+            if self.comparison:
+                self.comparison_frame().to_excel(xw, index=False, sheet_name="comparison")
             self.counts_frame(False).to_excel(xw, index=False, sheet_name="counts")
         safe = re.sub(r"[^\w.+-]+", "_", self.name or "screen").strip("_") or "screen"
         return buf.getvalue(), f"{safe}.results.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
