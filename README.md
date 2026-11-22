@@ -110,6 +110,8 @@ against untreated — and see which dependencies they share and which belong to 
 - **Built-in example**: the HAP1 TKOv3 screen at T18 against T18 starved. It finds 30 starvation-specific
   dependencies led by TSC2, TSC1 and KEAP1, and 36 shared ones that deepen under starvation.
 - Exports to CSV, a sheet in the Excel workbook, and a section in the PDF report.
+- **Confirmed defaults** (22 November 2026): FDR 0.05, smallest reported change 0.5, at least 3 guides, a
+  dependency at a scaled effect of −0.5 or below. Guide agreement is shown in the table, not used to filter.
 
 ## Thresholds
 

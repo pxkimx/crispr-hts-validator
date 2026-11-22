@@ -29,8 +29,13 @@ from scipy import stats
 from . import qc
 from .drugz import _empirical_bayes
 
-# Scientific choices, shown in the app. DEFAULTS["dependency"] follows the convention that comes with the
-# scaling: -1 is the median core-essential gene, and -0.5 is the usual line for calling a gene a dependency.
+# Scientific choices, confirmed by the user on 2026-11-22 and shown in the app.
+#   dependency -0.5  the usual line once -1 is the median core-essential gene; on HAP1 TKOv3 it gives 1,683
+#                    dependencies at T18 and 1,821 under starvation, 1,500 of them shared.
+#   min_delta  0.5   half the distance between a non-essential and a median core-essential gene; 88 genes
+#                    differ on that example (30 starvation-specific, 16 the other way, 36 shared but deeper).
+#   Guide agreement is reported, never used to filter: four of those 88 rest on a 2-of-4 split, and the user
+#   chose to see them rather than have them dropped.
 DEFAULTS = {
     "cmp_fdr": 0.05,          # FDR below which a difference is called
     "cmp_min_delta": 0.5,     # and the smallest difference in scaled effect worth reporting
