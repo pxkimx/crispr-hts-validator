@@ -583,14 +583,37 @@ class Project:
         if not self.qc:
             raise ValueError("Run the quality checks first.")
         rows = []
+
+        def add(c, item, value, status, why=""):
+            rows.append({"check": c["name"], "item": item, "value": value, "status": status, "why": why})
+
+        def num(p, *keys):
+            """The number this kind of row is about. Checks carry different ones — an AUC, a median fold
+            change, cells per guide — so take the first that is there rather than assume one."""
+            for k in keys:
+                if k in p:
+                    return p[k]
+            return ""
+
         for c in self.qc["checks"]:
-            rows.append({"check": c["name"], "item": "overall", "value": "", "status": c["status"], "why": c["why"]})
+            add(c, "overall", num(c, "median", "n"), c["status"], c["why"])
             for p in c.get("per_sample", []):
-                rows.append({"check": c["name"], "item": p["sample"], "value": p["value"], "status": p["status"], "why": ""})
+                add(c, p["sample"], num(p, "value"), p["status"])
             for p in c.get("pairs", []):
-                rows.append({"check": c["name"], "item": f"{p['a']} vs {p['b']}", "value": p["value"], "status": p["status"], "why": ""})
+                add(c, f"{p['a']} vs {p['b']}", num(p, "value"), p["status"],
+                    "" if "spearman" not in p else f"Spearman ρ {p['spearman']:.3f}")
             for p in c.get("per_condition", []):
-                rows.append({"check": c["name"], "item": p["condition"], "value": p["value"], "status": p["status"], "why": ""})
+                # essentials reports an AUC as "value"; the controls check reports the median log2 fold
+                # change of the control guides, which is the number that matters there
+                why = ""
+                if c["id"] == "ntc" and np.isfinite(p.get("sd", np.nan)):
+                    why = f"spread (robust SD) {p['sd']:.3f}, smallest effect above noise ±{p['floor']:.2f}"
+                add(c, p["condition"], num(p, "value", "median"), p["status"], why)
+            for p in c.get("rows", []):                      # library representation, step by step
+                add(c, p["step"], p["per_guide"], p["status"], f"{p['cells']:,.0f} cells")
+            if c.get("moi"):
+                add(c, "MOI", c["moi"]["moi"], c["moi"]["status"],
+                    f"{c['moi']['one_guide']:.0f}% of transduced cells carry one guide")
         return pd.DataFrame(rows)
 
     def export(self, what: str, name: str = "", fmt: str = "csv") -> tuple[bytes, str, str]:

@@ -178,3 +178,55 @@ def test_screen_fields_are_validated():
             P.set_design({**P.design, "screen": bad})
     P.set_design({**P.design, "screen": {}})
     assert P.screen == {}
+
+
+# ------------------------------------------------------------------ exports, on a screen that has controls
+def _qc_project(key="hap1"):
+    import time
+    P = session.Project()
+    P.load_example(key)
+    P.set_design({**P.design, "screen": {"moi": "0.3", "cells_bottleneck": "25000000"}})
+    j = P.run_qc()
+    while P.jobs[j["id"]].state == "running":
+        time.sleep(0.05)
+    assert P.jobs[j["id"]].state == "done", P.jobs[j["id"]].error
+    return P
+
+
+def test_qc_export_works_on_a_screen_with_non_targeting_controls():
+    """Reported by the 2026-11-22 audit: the controls check added in 1.1.0 has no "value" in its
+    per-condition rows, so every QC export raised KeyError on any screen that has control guides — and the
+    earlier tests all used demo1, which has none."""
+    P = _qc_project()
+    assert any(c["id"] == "ntc" and c["n"] > 0 for c in P.qc["checks"]), "this example should have controls"
+    df = P.qc_frame()
+    for what, fmt in (("qc", "csv"), ("all", "xlsx")):
+        body, fname, _ = P.export(what, fmt=fmt)
+        assert len(body) > 500 and fname
+    ntc = df[df["check"] == "Non-targeting controls"]
+    assert len(ntc) > 1                                   # the overall row plus one per condition
+    assert (ntc["item"] != "overall").any()
+    assert all(isinstance(v, (int, float)) or v == "" for v in ntc["value"])
+
+
+def test_qc_export_covers_every_check_and_its_detail_rows():
+    P = _qc_project()
+    df = P.qc_frame()
+    names = {c["name"] for c in P.qc["checks"]}
+    assert names <= set(df["check"]), names - set(df["check"])
+    # the checks added after 1.0 carry their own shapes; each must reach the file
+    assert "at the tightest passage" in set(df["item"]) and "MOI" in set(df["item"])
+    assert (df[df["check"] == "Guides per gene"]["value"] != "").any()
+    rep = df[(df["check"] == "Replicate agreement") & (df["item"] != "overall")]
+    assert rep["why"].str.contains("Spearman").all()
+
+
+def test_qc_export_survives_a_check_shape_it_has_not_seen():
+    """A new check should never be able to break the export by carrying a different set of fields."""
+    P = _qc_project()
+    P.qc["checks"].append({"id": "future", "name": "Something new", "status": "pass", "why": "...",
+                           "per_condition": [{"condition": "A", "status": "pass", "surprise": 1}],
+                           "per_sample": [{"sample": "S1", "status": "warn"}]})
+    df = P.qc_frame()
+    assert "Something new" in set(df["check"])
+    assert len(P.export("qc", fmt="csv")[0]) > 500

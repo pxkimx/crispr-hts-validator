@@ -115,8 +115,9 @@ Change any of them under *Thresholds* on the Quality page (pooled and arrayed ea
 
 ## Speed
 
-A genome-wide MAGeCK-style test on the 70,877-guide TKOv3 screen takes about **6 seconds** on a recent Mac,
-against 25 before version 1.4. Nearly all of that time is the permutation null, and nearly all of *that* goes to
+A genome-wide MAGeCK-style test on the 70,877-guide TKOv3 screen takes about **6 seconds** on an idle
+recent Mac with several cores, against 25 before version 1.4 (any timing depends on the machine and on what
+else it is doing). Nearly all of that time is the permutation null, and nearly all of *that* goes to
 the few genes with many guides: in TKOv3 a single gene with 94 guides costs more than all 17,247 genes with four
 put together. Those permutation blocks now run on several cores, each starting from the generator state it would
 have reached by drawing in turn (jump-ahead), so the random numbers, and therefore the p-values, are exactly

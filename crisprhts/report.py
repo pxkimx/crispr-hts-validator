@@ -14,8 +14,37 @@ from reportlab.lib import colors  # noqa: E402
 from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # noqa: E402
 from reportlab.lib.units import mm  # noqa: E402
-from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer,  # noqa: E402
+from reportlab.platypus import (Image, KeepTogether, PageBreak, SimpleDocTemplate, Spacer,  # noqa: E402
                                 Table, TableStyle)
+from reportlab.platypus import Paragraph as _Paragraph  # noqa: E402
+
+# The report is set in Helvetica, one of the fonts every PDF reader has, so nothing has to be embedded. Its
+# WinAnsi encoding stops at Latin-1 plus some punctuation, and a character outside that prints as a hollow box.
+# The checks and the methods are written for the screen, where these all render, so they are translated here at
+# the edge of the PDF rather than being kept out of the wording.
+_PDF_CHARS = str.maketrans({
+    "≥": "&gt;=",          # >=  (appears in every threshold rule)
+    "≤": "&lt;=",          # <=
+    "₂": "<sub>2</sub>",   # the 2 of log2
+    "²": "<super>2</super>",
+    "α": "alpha",          # the alpha of alpha-RRA
+    "ρ": "rho",
+    "−": "-",              # a true minus sign
+    "′": "'",              # prime, as in Z'
+    "→": "-&gt;",
+})
+
+
+def Paragraph(text, *args, **kwargs):
+    """Every piece of text in the report goes through here, so the translation cannot be forgotten."""
+    return _Paragraph(str(text).translate(_PDF_CHARS), *args, **kwargs)
+
+
+def plain(text: str) -> str:
+    """The same, for text drawn straight onto the canvas, which takes no markup."""
+    return (str(text).replace("≥", ">=").replace("≤", "<=").replace("₂", "2")
+            .replace("²", "2").replace("α", "alpha").replace("ρ", "rho")
+            .replace("−", "-").replace("′", "'").replace("→", "->"))
 
 from . import __version__  # noqa: E402
 
@@ -59,7 +88,7 @@ def _ax_style(ax):
 
 
 def _table(rows, widths, st, header=True, zebra=True):
-    data = [[Paragraph(str(c), st["cell"]) if not isinstance(c, Paragraph) else c for c in r] for r in rows]
+    data = [[c if isinstance(c, _Paragraph) else Paragraph(c, st["cell"]) for c in r] for r in rows]
     t = Table(data, colWidths=widths, repeatRows=1 if header else 0)
     style = [("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor("#c3c2b7")),
              ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]
@@ -99,7 +128,7 @@ def _footer(name):
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(MUTED)
-        canvas.drawString(18 * mm, 10 * mm, f"CRISPR HTS Validator {__version__} · {name}")
+        canvas.drawString(18 * mm, 10 * mm, plain(f"CRISPR HTS Validator {__version__} · {name}"))
         canvas.drawRightString(192 * mm, 10 * mm, f"page {doc.page}")
         canvas.restoreState()
     return draw
