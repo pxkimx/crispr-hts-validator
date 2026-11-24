@@ -20,7 +20,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import __version__, cnv, compare, count, enrichment, pooled_io, pooled_methods, pooled_stats, prefs, qc
+from . import (__version__, cnv, compare, count, crosscompare, enrichment, pooled_io, pooled_methods,
+               pooled_stats, prefs, qc)
 
 HOME = Path.home() / "Library" / "Application Support" / "CRISPR HTS Validator"
 UPLOADS_ROOT = HOME / "uploads"
@@ -48,6 +49,16 @@ EXAMPLES = {
               "counts": "hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt",
               "screeninfo": "hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE-SCREENINFO.txt",
               "positions": "hart-bagel/tkov3-example/TKOv3-guide-positions.txt"},
+    "cross": {"title": "HAP1 T18 held in two projects (cross-project comparison)",
+              "about": "The same HAP1 screen as two separate count tables: the TKOv3 example here, and the BAGEL "
+                       "reads_hap1 table as the other project. One keys guides on GENE_sequence and the other on "
+                       "the bare 20-mer, so no guide ID is in both and the genes have to be matched by name \u2014 "
+                       "which is what a cross-project comparison has to do. The app recognises the protospacers "
+                       "and says so: these are one library, not two.",
+              "counts": "hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE.txt",
+              "screeninfo": "hart-bagel/tkov3-example/HAP1-TKOv3-EXAMPLE-SCREENINFO.txt",
+              "positions": "hart-bagel/tkov3-example/TKOv3-guide-positions.txt",
+              "partner": "hart-bagel/reads_hap1.txt"},
     "hap1": {"title": "HAP1 TKO (Hart lab, BAGEL example)",
              "about": "Genome-wide knockout screen in HAP1 cells: T0 and T18 A/B/C. About 71,000 guides.",
              "counts": "hart-bagel/reads_hap1.txt"},
@@ -120,6 +131,10 @@ class Project:
         self.thresholds: dict = prefs.get("pooled_thresholds", qc.THRESHOLDS)   # the user's own, kept between sessions
         self.screen: dict = {}        # experiment numbers: cells per guide, MOI, selection (see SCREEN_FIELDS)
         self.comparison: dict | None = None   # the last two-screen comparison (see run_compare)
+        self.partner: dict | None = None      # a second project's count table, for the cross-library compare
+        self.cross: dict | None = None        # the last cross-project comparison (see run_cross)
+        self.mapping: dict | None = None      # an optional gene-name mapping between the two libraries
+        self.mapping_name = ""
         self.positions: pd.DataFrame | None = None
         self.positions_name = ""
 
@@ -135,6 +150,8 @@ class Project:
             self.design = pooled_io.guess_design(t.samples)
             self.qc = None
             self.results = {}
+            self.comparison = None
+            self.cross = None                 # a new main table invalidates any comparison built on the old
 
     def load_counts(self, path: Path, name: str) -> dict:
         t = pooled_io.read_count_table(path, name)
@@ -189,6 +206,8 @@ class Project:
                                                        "control": ["T18_A", "T18_B", "T18_C"]})
             if "positions" in ex:
                 self.load_positions(TEST_DATA / ex["positions"], Path(ex["positions"]).name)
+            if "partner" in ex:
+                self.load_partner(TEST_DATA / ex["partner"], Path(ex["partner"]).name)
         else:
             self.load_library(TEST_DATA / ex["library"], Path(ex["library"]).name)
             for f, s in ex["fastq"]:
@@ -442,6 +461,140 @@ class Project:
                 "guides": gd[["guide", "lfc_a", "lfc_b", "delta_guide", "z"]].round(4).to_dict("records"),
                 "a": c["a"]["name"], "b": c["b"]["name"]}
 
+    # ---- comparing two projects, which may be two different libraries
+    def load_partner(self, path: Path, name: str) -> dict:
+        """A second count table, from another project. Kept apart from the main one: nothing is merged, and
+        the two keep their own guides, genes, samples and normalisation."""
+        t = pooled_io.read_count_table(path, name)
+        d = pooled_io.guess_design(t.samples)
+        with self.lock:
+            self.partner = {"table": t, "name": name, "design": d}
+            self.cross = None
+        return self.partner_info()
+
+    def partner_info(self) -> dict | None:
+        p = self.partner
+        if not p:
+            return None
+        t = p["table"]
+        g = [str(x) for x in t.genes]
+        shared = None
+        if self.table:
+            m = crosscompare.match_genes(self.table.genes, g, self.mapping)
+            shared = {"n": len(m["shared"]), "n_a": m["n_a"], "n_b": m["n_b"], "kind_a": m["kind_a"],
+                      "kind_b": m["kind_b"], "n_mapped": m["n_mapped"], "note": m["note"],
+                      "unmatched_a": m["unmatched_a"][:8], "unmatched_b": m["unmatched_b"][:8]}
+        return {"name": p["name"], "guides": len(t.guides), "genes": len(set(g)), "samples": t.samples,
+                "comparisons": p["design"]["comparisons"], "notes": t.notes, "shared": shared,
+                "mapping": self.mapping_name if self.mapping else "",
+                "mapping_rows": len(self.mapping or {})}
+
+    def load_mapping(self, path: Path, name: str) -> dict:
+        m = crosscompare.read_mapping(path)
+        with self.lock:
+            self.mapping, self.mapping_name = m, name
+            self.cross = None
+        return self.partner_info() or {"mapping": name, "mapping_rows": len(m)}
+
+    def clear_partner(self) -> dict:
+        with self.lock:
+            self.partner, self.cross, self.mapping, self.mapping_name = None, None, None, ""
+        return self.summary()
+
+    def cross_thresholds(self) -> dict:
+        return {**crosscompare.DEFAULTS, **prefs.get("cross_thresholds", crosscompare.DEFAULTS)}
+
+    def run_cross(self, opts: dict) -> dict:
+        """Compare one of this project's comparisons with one from the partner project."""
+        if not self.table:
+            raise ValueError("Load data first.")
+        if not self.partner:
+            raise ValueError("Load the other project's count table first.")
+        by_name = {c["name"]: c for c in self.design["comparisons"]}
+        a = opts.get("a")
+        if a not in by_name:
+            raise ValueError("Pick one of this project's comparisons.")
+        pt = self.partner["table"]
+        treat = [x for x in (opts.get("b_treatment") or []) if x in pt.samples]
+        ctrl = [x for x in (opts.get("b_control") or []) if x in pt.samples]
+        if not treat or not ctrl:
+            raise ValueError("Choose the other project's treated and reference samples.")
+        if set(treat) & set(ctrl):
+            raise ValueError("A sample cannot be both treated and reference in the same screen.")
+        comp_b = {"name": opts.get("b_name") or f"{self.partner['name']} screen",
+                  "treatment": treat, "control": ctrl}
+        th = {k: float(v) for k, v in (opts.get("thresholds") or {}).items() if k in crosscompare.DEFAULTS}
+        if th:
+            prefs.set("cross_thresholds", th, crosscompare.DEFAULTS)
+        th = self.cross_thresholds()
+
+        def work(job: Job):
+            job.message = f"Matching genes and comparing {a} with {comp_b['name']}\u2026"
+            t = self.table
+            side_a = {"counts": t.counts, "guides": t.guides, "genes": t.genes, "samples": t.samples,
+                      "comparison": by_name[a], "project": self.name}
+            side_b = {"counts": pt.counts, "guides": pt.guides, "genes": pt.genes, "samples": pt.samples,
+                      "comparison": comp_b, "project": self.partner["name"]}
+            r = crosscompare.cross_compare(side_a, side_b, thresholds=th, mapping=self.mapping)
+            r["notes"] = crosscompare.library_notes(r)
+            r["quality"] = compare.quality_note(self.qc, by_name[a], by_name[a])[:1]
+            r["when"] = time.strftime("%Y-%m-%d %H:%M")
+            with self.lock:
+                self.cross = r
+        return self.start("cross", work)
+
+    CROSS_COLUMNS = ["gene", "guides_a", "guides_b", "scaled_a", "scaled_b", "delta", "se_delta", "t",
+                     "p", "fdr", "call", "stronger_in"]
+
+    def cross_view(self, search: str = "", limit: int = 400) -> dict:
+        c = self.cross
+        if not c:
+            raise ValueError("Run a cross-project comparison first.")
+        g = c["genes"]
+        if search:
+            g = g[g["gene"].str.contains(re.escape(search), case=False, regex=True)]
+        shown = g.head(limit)
+        m = c["matching"]
+        return {
+            "a": c["a"], "b": c["b"], "species": c["species"], "when": c["when"],
+            "thresholds": c["thresholds"], "concordance": c["concordance"], "power": c["power"],
+            "notes": c["notes"], "quality": c["quality"], "shared_guides": c["shared_guides"],
+            "matching": {k: m[k] for k in ("n_a", "n_b", "n_direct", "n_mapped", "kind_a", "kind_b",
+                                           "unmatched_a", "unmatched_b", "mapping_direction", "note")},
+            "columns": self.CROSS_COLUMNS,
+            "rows": shown[self.CROSS_COLUMNS].to_dict("split")["data"],
+            "total": int(len(g)),
+            "points": [[r.gene, round(float(r.scaled_a), 4), round(float(r.scaled_b), 4),
+                        round(float(r.delta), 4), float(r.fdr), r.call, bool(r.different)]
+                       for r in c["genes"].itertuples()],
+        }
+
+    def cross_gene(self, gene: str) -> dict:
+        """Every guide of one gene in each library. They do not pair up — that is the point — so each side is
+        listed on its own."""
+        c = self.cross
+        if not c:
+            raise ValueError("Run a cross-project comparison first.")
+        row = c["genes"][c["genes"]["gene"] == gene]
+        if row.empty:
+            raise ValueError(f"{gene} is not in the comparison.")
+        key = crosscompare.normalise_name(gene)
+        back = {v: k for k, v in c["matching"]["xlate"].items()}
+        cols = ["guide", "lfc", "scaled", "abundance"]
+        ga = c["guide_a"][c["guide_a"]["gene"] == key][cols]
+        gb = c["guide_b"][c["guide_b"]["gene"] == back.get(key, key)][cols]
+        return {"gene": gene, "summary": row.iloc[0].to_dict(),
+                "guides_a": ga.round(4).to_dict("records"), "guides_b": gb.round(4).to_dict("records"),
+                "a": c["a"]["name"], "b": c["b"]["name"]}
+
+    def cross_frame(self) -> pd.DataFrame:
+        if not self.cross:
+            raise ValueError("Run a cross-project comparison first.")
+        g = self.cross["genes"].drop(columns=["normZ"]).copy()
+        g.insert(1, "screen_a", f'{self.cross["a"]["project"]} \u2014 {self.cross["a"]["name"]}')
+        g.insert(2, "screen_b", f'{self.cross["b"]["project"]} \u2014 {self.cross["b"]["name"]}')
+        return g
+
     def comparison_frame(self) -> pd.DataFrame:
         if not self.comparison:
             raise ValueError("Run a comparison first.")
@@ -552,6 +705,8 @@ class Project:
                "norm_methods": pooled_stats.NORM_METHODS, "control_pattern": CONTROL_PATTERN,
                "screen": self.screen, "screen_fields": SCREEN_FIELDS,
                "has_comparison": self.comparison is not None,
+               "partner": self.partner_info(), "has_cross": self.cross is not None,
+               "cross_thresholds": self.cross_thresholds(), "cross_defaults": dict(crosscompare.DEFAULTS),
                "compare_thresholds": self.compare_thresholds(),
                "compare_defaults": dict(compare.DEFAULTS),
                "jobs": [j.public() for j in self.jobs.values() if j.state == "running"]}
@@ -698,6 +853,8 @@ class Project:
         safe = re.sub(r"[^\w.+-]+", "_", name or self.name or "screen").strip("_") or "screen"
         if what == "comparison":
             df, fn = self.comparison_frame(), f"{safe}.comparison"
+        elif what == "cross":
+            df, fn = self.cross_frame(), f"{safe}.cross_project"
         elif what == "genes":
             df, fn = self.gene_frame(name), f"{safe}.gene_summary"
         elif what == "guides":
@@ -732,6 +889,8 @@ class Project:
                 self.gene_frame(k).to_excel(xw, index=False, sheet_name=re.sub(r"[\[\]:*?/\\]", "_", "genes " + k)[:31])
             if self.comparison:
                 self.comparison_frame().to_excel(xw, index=False, sheet_name="comparison")
+            if self.cross:
+                self.cross_frame().to_excel(xw, index=False, sheet_name="cross-project")
             self.counts_frame(False).to_excel(xw, index=False, sheet_name="counts")
         safe = re.sub(r"[^\w.+-]+", "_", self.name or "screen").strip("_") or "screen"
         return buf.getvalue(), f"{safe}.results.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

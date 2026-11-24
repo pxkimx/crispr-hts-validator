@@ -11,7 +11,7 @@
   go = function (p) {
     _go(p);
     $("#tabs button[data-p=compare]").classList.toggle("hidden", MODE !== "pooled");
-    if (p === "compare" && MODE === "pooled") renderCompare();
+    if (p === "compare" && MODE === "pooled" && (window.XCMODE || "in") === "in") renderCompare();
   };
   const _setMode = setMode;
   setMode = function (m) {
@@ -190,4 +190,5 @@
   }
 
   function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  window.CMP_RENDER = renderCompare;          // cross.js calls this when the mode switches back
 })();

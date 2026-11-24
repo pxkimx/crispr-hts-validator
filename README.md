@@ -113,6 +113,45 @@ against untreated — and see which dependencies they share and which belong to 
 - **Confirmed defaults** (22 November 2026): FDR 0.05, smallest reported change 0.5, at least 3 guides, a
   dependency at a scaled effect of −0.5 or below. Guide agreement is shown in the table, not used to filter.
 
+## Comparing screens in two projects, and two libraries (version 1.6)
+
+A screen in a **separate count table** — another experiment, another lab, another library — can be compared
+with this one. Nothing is merged: each keeps its own guides, samples and normalisation, and the two are joined
+only by gene name and by the essential-gene scale.
+
+This route is blunter than the one above, unavoidably. Two libraries target a gene with different sequences, so
+the guide-by-guide cancellation is gone. Split TKOv3 in half and the cost is plain: **EEF2's guides in one half
+read −0.6 and −0.2 while its guides in the other read −5.2 and −7.3** — a measured effect of −0.4 against −5.3,
+from one cell line at one timepoint. Everything below follows from taking that seriously.
+
+- **Gene names** are matched exactly after case, spacing and Ensembl version suffixes are normalised, with an
+  optional two-column mapping file for the rest. No alias table is bundled and nothing is downloaded, so names
+  that do not line up are reported and diagnosed (it names the identifier type on each side), never guessed at.
+- **The uncertainty of a gene's effect** is built from the spread of its guides, shrunk toward the spread a gene
+  of that strength usually shows — a mean–variance trend, as MAGeCK and limma-voom fit, because every guide of a
+  harmless gene reads near zero whether it cuts or not while against an essential gene a dead guide reads 0 and a
+  good one −6 — floored by the spread its read abundance implies, and weighted by degrees of freedom with the
+  prior strength **estimated from the data** by Smyth's (2004) moment method rather than chosen by hand.
+- **A t distribution, not a normal one.** With four guides a side the standard error is itself barely known, and
+  treating it as exact manufactures significance.
+- **The scale's own error is propagated** into every gene in proportion to how deep that gene is, so a thin
+  library's deepest genes are its least certain. Below **30 reference genes** in either set the comparison is
+  refused: for two different libraries the scale is the whole of the bridge, not a cosmetic step.
+- **The resolution is computed and printed.** A gene with the typical guide spread needs a difference of *x* to
+  clear the FDR bar across every gene tested; read a null result as "no difference this large", not "no
+  difference". Guides per gene is the lever, and the figure falls roughly as its square root.
+- **It tells you when you do not need it.** Guides are matched on the protospacer inside the ID, so the same
+  library under two ID conventions is recognised and the app says to use the paired route instead.
+- **Built-in example**: the same HAP1 screen held in two tables (TKOv3 `GENE_20mer` IDs against BAGEL bare
+  20-mers — no ID in common). Pearson 0.996 and **nothing called different** out of 17,620 genes, with the
+  shared-library warning raised.
+- Exports to CSV, a sheet in the Excel workbook, and a section in the PDF report.
+- **Defaults, awaiting confirmation**: FDR 0.05, smallest reported change **1.0** (twice the within-project
+  figure, because a smaller cross-library difference is inside the systematic error between libraries), at least
+  3 guides in each library, a dependency at a scaled effect of −0.5 or below.
+
+Not built: merging three or more projects, and comparing across species.
+
 ## Thresholds
 
 Every pass / warn / fail line is a scientific choice. The defaults follow published guidance and were confirmed on
@@ -166,6 +205,15 @@ those of a single-threaded run — `CH_RRA_WORKERS=1` forces that path and gives
   restored; the confirmed defaults are checked by value.
 - `tests/test_units.py` also checks that jump-ahead reproduces the generator's stream and that the parallel and
   single-threaded gene tests agree exactly.
+- `tests/test_compare.py` — the within-project comparison: planted screen-specific genes recovered, identical
+  screens calling nothing, the scaling landing on −1 and 0, and agreement with drugZ when both screens share a
+  reference (Spearman 0.96, same top genes).
+- `tests/test_cross.py` — the cross-project comparison on two libraries of known truth (planted genes recovered,
+  resolution improving with guides per gene, a 1.7× difference in dynamic range absorbed by the scale and nothing
+  called), gene-name matching and mapping files, and two real-data checks: **splitting TKOv3's four guides per
+  gene into two disjoint halves**, where TSC2 and TSC1 still rank in the top 15 but two guides a side cannot clear
+  a genome-wide bar and the app says so instead of pretending; and **one HAP1 screen read from two count tables**
+  with no guide ID in common, where nothing at all is called different.
 - `tests/test_app.py` — the app end to end, and quitting when the window closes.
 
 ## Test data and credits

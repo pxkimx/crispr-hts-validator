@@ -163,6 +163,11 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
 <section class="page" id="p-compare">
   <div class="kicker">Two screens</div>
   <h1>Compare</h1>
+  <div class="modepill" id="cmpPill" role="group" aria-label="What to compare">
+    <button data-m="in" class="on"><b>In this project</b><span>two comparisons from one count table &middot; every guide is in both</span></button>
+    <button data-m="across"><b>Another project</b><span>a second count table &middot; a different library</span></button>
+  </div>
+  <div id="cmpIn">
   <p class="lede">Put two screens of the same library side by side and see which dependencies they share and which belong to one of them — a cell line against its isogenic control, or treated against untreated. Each screen keeps its own reference sample, and both are placed on one scale before anything is subtracted.</p>
   <div class="empty" id="cmpEmpty">Set up at least two comparisons on the Samples page first.</div>
   <div id="cmpBody" class="hidden">
@@ -192,6 +197,61 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
         </div>
       </div>
       <div class="card mt small muted" id="cmpNotes"></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ---------------- across projects, and across libraries ---------------- -->
+  <div id="cmpAcross" class="hidden">
+    <p class="lede">Compare this project&rsquo;s screen with one held in a separate count table &mdash; another experiment, another lab, another library. Nothing is merged: each screen keeps its own guides, samples and normalisation, and the two are joined only by the essential-gene scale and by gene name.</p>
+    <div class="card warnline small">
+      <b>This is the blunter of the two routes, and deliberately so.</b> When both screens share a library every guide appears in both, and taking the difference guide by guide cancels that guide&rsquo;s own cutting efficiency &mdash; the largest source of error in a screen. Two different libraries target the same gene with different sequences, so nothing pairs up and that cancellation is lost. Split a real library in half and the cost is plain: EEF2&rsquo;s guides in one half of TKOv3 read &minus;0.6 and &minus;0.2 while its guides in the other half read &minus;5.2 and &minus;7.3, from one cell line at one timepoint. The app therefore reports, from your own data, the smallest difference this pair of screens can actually resolve &mdash; read it before you read the table.
+    </div>
+
+    <div class="grid g2s mt">
+      <div class="card drop" data-kind="partner">
+        <div class="drop-ico">&#9113;</div>
+        <h3>The other project&rsquo;s count table</h3>
+        <p class="muted small">A MAGeCK- or BAGEL-style count table: guide, gene, then one column per sample. Its library may be entirely different from this one.</p>
+        <div class="row"><button class="btn primary" data-browse="partner">Choose file&hellip;</button><span class="faint small">or drop it here</span><span class="spacer"></span><button class="btn sm hidden" id="xcClear">Remove</button></div>
+        <div id="xcPartner" class="mt small"></div>
+      </div>
+      <div class="card">
+        <h3>Gene names</h3>
+        <p class="muted small">Matched exactly, after case, spacing and an Ensembl version suffix are normalised. No alias table is bundled and nothing is downloaded, so names that do not line up are reported rather than guessed at &mdash; supply a two-column mapping file for those.</p>
+        <div id="xcMatch" class="small"></div>
+        <div class="row mt"><button class="btn sm" data-browse="mapping">Mapping file&hellip;</button><span class="faint small" id="xcMapInfo">two columns: a name in one library, the matching name in the other</span></div>
+      </div>
+    </div>
+
+    <div class="card mt hidden" id="xcSetup">
+      <div class="grid g2s">
+        <div><label class="small">This project&rsquo;s screen (A)<select id="xcA"></select></label></div>
+        <div><label class="small">Name for the other screen (B)<input type="text" id="xcName" placeholder="e.g. HGPS iPSC-VSMC, lonafarnib"></label></div>
+      </div>
+      <div class="mt"><div class="small muted">Click a sample of the other project to mark it <b>treated</b>, again for <b>reference</b>, again to drop it.</div><div class="row mt" id="xcChips"></div></div>
+      <div class="row mt" id="xcTh"></div>
+      <div class="row mt"><span class="muted small">Thresholds are scientific choices &mdash; they are kept for next time, and Methods explains each one.</span><span class="spacer"></span><button class="btn primary" id="xcRun">Compare &rarr;</button></div>
+    </div>
+
+    <div id="xcResult" class="hidden">
+      <div class="card mt" id="xcChecks"></div>
+      <div class="grid g4 mt" id="xcTiles"></div>
+      <div class="grid g2 mt">
+        <div class="card chart-card"><div class="row"><h3>Screen against screen</h3><span class="spacer"></span><span class="faint small">scaled effect, &minus;1 = median core-essential gene</span></div><div class="plot" id="xcScatter"></div></div>
+        <div class="card chart-card"><div class="row"><h3>What differs</h3><span class="spacer"></span><span class="faint small">&Delta; against FDR</span></div><div class="plot" id="xcVolcano"></div></div>
+      </div>
+      <div class="grid g2s mt">
+        <div class="card">
+          <div class="row"><h3>Genes</h3><span class="spacer"></span><span class="muted small" id="xcCount"></span><input type="text" id="xcSearch" placeholder="Search gene&hellip;" size="16"><a class="btn sm" href="/api/export?what=cross&amp;fmt=csv" download>CSV</a></div>
+          <div class="scroll tall"><table class="tbl" id="xcTable"></table></div>
+        </div>
+        <div>
+          <div class="card" id="xcGene"><span class="muted">Click a gene to see its guides in each library. They do not pair up &mdash; that is the whole difficulty &mdash; so each library is shown on its own.</span></div>
+          <div class="card mt" id="xcConc"></div>
+        </div>
+      </div>
+      <div class="card mt small muted" id="xcFoot"></div>
     </div>
   </div>
 </section>
@@ -375,6 +435,8 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
         <a data-exp="counts" data-fmt="csv">Raw counts (CSV)</a>
         <a data-exp="normcounts" data-fmt="csv">Normalised counts (CSV)</a>
         <a data-exp="qc" data-fmt="csv">Quality checks (CSV)</a>
+        <a data-exp="comparison" data-fmt="csv">Two screens compared (CSV)</a>
+        <a data-exp="cross" data-fmt="csv">Across projects (CSV)</a>
         <a data-exp="all" data-fmt="xlsx">Everything (Excel workbook)</a>
       </div>
     </div>
@@ -415,5 +477,6 @@ window.addEventListener("message",function(e){var m=e.data;if(m&&m.type==="toolb
 <script src="arrayed.js"></script>
 <script src="methods.js"></script>
 <script src="compare.js"></script>
+<script src="cross.js"></script>
 </body>
 </html>

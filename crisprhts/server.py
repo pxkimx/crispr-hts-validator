@@ -136,6 +136,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(lambda: P.comparison_view(q.get("search", ""), int(q.get("limit", 400))))
         if u.path == "/api/compare/gene":
             return self._guard(lambda: P.comparison_gene(q.get("gene", "")))
+        if u.path == "/api/cross":
+            return self._guard(lambda: P.cross_view(q.get("search", ""), int(q.get("limit", 400))))
+        if u.path == "/api/cross/gene":
+            return self._guard(lambda: P.cross_gene(q.get("gene", "")))
         if u.path == "/api/gene":
             return self._guard(lambda: P.gene(q.get("name", ""), q.get("gene", "")))
         if u.path == "/api/a/state":
@@ -203,6 +207,10 @@ class Handler(BaseHTTPRequestHandler):
                     if P.table and P.table.fmt != "FASTQ":
                         P.reset()
                     return P.add_fastq(self._upload(q.get("name", "")), q.get("name", ""))
+                if kind == "partner":
+                    return {"partner": P.load_partner(self._upload(q.get("name", "")), q.get("name", ""))}
+                if kind == "mapping":
+                    return {"partner": P.load_mapping(self._upload(q.get("name", "")), q.get("name", ""))}
                 if kind == "positions":
                     return {"positions": P.load_positions(self._upload(q.get("name", "")), q.get("name", ""))}
                 if kind == "screeninfo":
@@ -247,6 +255,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(lambda: P.run_qc(d.get("thresholds")))
         if u.path == "/api/compare":
             return self._guard(lambda: P.run_compare(d))
+        if u.path == "/api/cross":
+            return self._guard(lambda: P.run_cross(d))
+        if u.path == "/api/cross/clear":
+            return self._guard(P.clear_partner)
         if u.path == "/api/analyse":
             return self._guard(lambda: P.run_analysis(d))
         if u.path == "/api/controls":

@@ -192,6 +192,9 @@ def pooled_report(P) -> bytes:
     if getattr(P, "comparison", None):
         s.append(PageBreak())
         _comparison_section(s, P.comparison, st)
+    if getattr(P, "cross", None):
+        s.append(PageBreak())
+        _cross_section(s, P.cross, st)
     s.append(PageBreak())
     s.append(Paragraph("Methods", st["h2"]))
     for txt in METHODS_POOLED:
@@ -199,6 +202,93 @@ def pooled_report(P) -> bytes:
         s.append(Spacer(1, 3))
     doc.build(s, onFirstPage=_footer(name), onLaterPages=_footer(name))
     return buf.getvalue()
+
+
+def _cross_section(s, c, st):
+    """Two screens from different projects, and so in general from different libraries."""
+    a, b, p, th = c["a"], c["b"], c["power"], c["thresholds"]
+    con, m = c["concordance"], c["matching"]
+    s.append(Paragraph("TWO PROJECTS COMPARED", st["kick"]))
+    s.append(Paragraph(f"{a['name']} against {b['name']}", st["h2"]))
+    s.append(Paragraph(
+        f"{a['project'] or 'this project'} against {b['project'] or 'the other project'}. Nothing is merged: "
+        "each screen keeps its own guides, samples and normalisation, and the two are joined only by gene name "
+        f"and by the essential-gene scale, with the median core-essential gene at \u22121 and the median "
+        f"non-essential gene at 0 ({c['species']} reference sets). Because the libraries differ, no guide "
+        "appears in both and the guide-by-guide cancellation that makes a within-project comparison sensitive "
+        "is not available; each gene's effect is the median of its guides, and the difference is judged against "
+        "the spread of those guides, the spread a gene of that strength usually shows, and the error in each "
+        f"screen's own scale, on a t distribution with {p['median_df']:.0f} degrees of freedom (prior strength "
+        f"{p['prior_df']:.1f}, estimated from the data). Run {c['when']}.", st["small"]))
+
+    s.append(Spacer(1, 5))
+    s.append(Paragraph("Can these two screens be compared?", st["h3"]))
+    rows = [["", "", "", "Why"]]
+    for n in c.get("notes", []):
+        rows.append([_status(n["status"], st), n["label"], str(n["value"]), n["why"]])
+    s.append(_table(rows, [13 * mm, 40 * mm, 22 * mm, W - 75 * mm], st))
+    s.append(Spacer(1, 6))
+    s.append(Paragraph(f"<b>Read the resolution line first:</b> on these two screens it is "
+                       f"{p['resolution']:.2f}.", st["small"]))
+
+    s.append(Spacer(1, 6))
+    rows = [["", "Count", "What it means"],
+            ["Genes compared", f"{len(c['genes']):,}",
+             f"matched by name out of {m['n_a']:,} here and {m['n_b']:,} there"
+             + (f", {m['n_mapped']:,} through the mapping file" if m["n_mapped"] else "")],
+            ["Shared dependencies", f"{con['dep_both']:,}",
+             f"needed by both ({con['dep_a']:,} in A, {con['dep_b']:,} in B)"],
+            ["Specific to A", f"{con['n_specific_a']:,}", f"a dependency in {a['name']} only"],
+            ["Specific to B", f"{con['n_specific_b']:,}", f"a dependency in {b['name']} only"],
+            ["Shared but deeper", f"{con.get('n_shared_stronger', 0):,}", "needed by both, significantly more by one"],
+            ["Agreement", f"r {con['pearson']:.3f}",
+             f"Spearman {con['spearman']:.3f}, dependencies shared (Jaccard) {con['jaccard']:.3f}"]]
+    s.append(_table(rows, [42 * mm, 24 * mm, W - 66 * mm], st))
+    s.append(Spacer(1, 6))
+    s.append(Paragraph(f"A gene counts as a dependency at a scaled effect of {th['xc_dependency']} or below. A "
+                       f"difference is called at FDR \u2264 {th['xc_fdr']} with an absolute change of at least "
+                       f"{th['xc_min_delta']}, over genes with at least {th['xc_min_guides']} guides in each "
+                       "library.", st["small"]))
+
+    g = c["genes"]
+    fig, ax = plt.subplots(1, 2, figsize=(7.1, 3.1))
+    col = {"shared": "#eb6834", "specific to A": "#2a78d6", "specific to B": "#e34948", "neither": "#c2c1ba"}
+    for call, grp in g.groupby("call"):
+        ax[0].scatter(grp["scaled_a"], grp["scaled_b"], s=3, lw=0, alpha=.7,
+                      c=col.get(call, "#999"), label=f"{call} ({len(grp):,})")
+    lim = [min(g["scaled_a"].min(), g["scaled_b"].min()), max(g["scaled_a"].max(), g["scaled_b"].max())]
+    ax[0].plot(lim, lim, lw=.7, ls="--", c="#999")
+    ax[0].set_xlabel(f"{a['name']} \u2014 scaled effect"); ax[0].set_ylabel(f"{b['name']} \u2014 scaled effect")
+    ax[0].legend(fontsize=5.5, markerscale=2, frameon=False, loc="upper left")
+    y = -np.log10(np.maximum(g["fdr"].to_numpy(), 1e-300))
+    bar = -np.log10(float(th["xc_fdr"]))
+    ax[1].scatter(g["delta"], y, s=3, lw=0, alpha=.6,
+                  c=np.where(g["different"], np.where(g["delta"] < 0, "#e34948", "#2a78d6"), "#c2c1ba"))
+    ax[1].axvline(0, lw=.7, ls="--", c="#999")
+    ax[1].axhline(bar, lw=.7, ls="--", c="#999")
+    ax[1].axvspan(-p["resolution"], p["resolution"], color="#c2c1ba", alpha=.18, lw=0)
+    ax[1].set_ylim(0, max(bar * 1.3, float(np.nanmax(y)) if len(y) else bar * 1.3))
+    ax[1].set_xlabel(f"change in scaled effect ({b['name']} \u2212 {a['name']})")
+    ax[1].set_ylabel("\u2212log10 FDR")
+    for axis in ax:
+        axis.tick_params(labelsize=6)
+        axis.xaxis.label.set_size(6.5); axis.yaxis.label.set_size(6.5)
+    fig.tight_layout()
+    s.append(_fig(fig))
+    s.append(Paragraph("The shaded band on the right is what this pair of screens cannot resolve.", st["small"]))
+
+    top = g[g["different"]].reindex(g[g["different"]]["delta"].abs().sort_values(ascending=False).index).head(20)
+    if len(top):
+        tr = [["Gene", "Guides A/B", "A", "B", "Change", "FDR", "Needed by"]]
+        for r in top.itertuples():
+            tr.append([r.gene, f"{r.guides_a}/{r.guides_b}", f"{r.scaled_a:.2f}", f"{r.scaled_b:.2f}",
+                       f"{r.delta:+.2f}", f"{r.fdr:.2g}",
+                       r.call + (f" (more in {r.stronger_in})" if r.stronger_in else "")])
+        s.append(KeepTogether([Paragraph("The 20 biggest differences", st["h3"]),
+                               _table(tr, [28 * mm, 20 * mm, 15 * mm, 15 * mm, 18 * mm, 18 * mm, W - 114 * mm], st)]))
+    else:
+        s.append(Paragraph(f"No gene met both the FDR and the size threshold: on these settings, and at the "
+                           f"{p['resolution']:.2f} this pair can resolve, the two screens do not differ.", st["p"]))
 
 
 def _comparison_section(s, c, st):
@@ -415,6 +505,18 @@ METHODS_POOLED = [
     "p(1)/p(\u22651) at the MOI entered (Joung et al., Nat Protoc 2017; Doench, Nat Rev Genet 2018).",
     "<b>Guides per gene.</b> Counted over targeting guides only; genes with fewer than four independent guides are "
     "listed, since a gene-level score built on one or two guides cannot separate a real effect from a bad guide.",
+    "<b>Comparing two projects.</b> A screen in a second count table is joined to this one only by gene name "
+    "(exact, after case, spacing and Ensembl version suffixes are normalised, plus an optional mapping file) and "
+    "by the essential-gene scale. No guide is assumed to be in both, so the guide-by-guide cancellation is not "
+    "available: a gene's effect is the median of its guides, and its standard error is built from the spread of "
+    "those guides shrunk toward a mean-variance trend fitted across the screen (the spread climbs steeply with "
+    "the effect, because a dead guide against an essential gene reads 0 while a good one reads -6), floored by "
+    "the spread the guides' read abundance implies, weighted by degrees of freedom with the prior strength "
+    "estimated by Smyth's (2004) moment method, and referred to a t distribution rather than a normal one. Each "
+    "screen's scale carries its own standard error, propagated into every gene in proportion to its depth; below "
+    "30 reference genes in either set the comparison is refused, because the scale is the whole of the bridge "
+    "between two libraries. The smallest difference the pair can resolve at the corrected FDR bar is computed "
+    "from the data and reported.",
     "<b>Comparing two screens.</b> Each screen is measured against its own reference. A gene's effect is the "
     "median of its guides, and each screen is then scaled so that the median core-essential gene (CEGv2) sits "
     "at -1 and the median non-essential gene (NEGv1) at 0, which removes the difference in dynamic range that "
