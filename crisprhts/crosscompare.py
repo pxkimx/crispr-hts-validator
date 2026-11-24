@@ -92,10 +92,13 @@ from .drugz import _empirical_bayes
 
 DATA = Path(__file__).resolve().parent / "data"
 
-# Scientific choices. Stated in Methods and on the page; awaiting the user's confirmation.
+# Scientific choices, confirmed by the user on 2026-11-24 and stated in Methods and on the page.
 #   xc_min_delta 1.0  deliberately twice the within-project 0.5: a cross-library difference smaller than that
 #                     is inside the systematic error between two libraries, and below the size this test can
-#                     resolve with four guides a side (see "minimum detectable difference" in the result).
+#                     resolve with four guides a side anyway — on the real HAP1 pair, 1.83 (see "resolution").
+#                     Considered and rejected: 0.5 for one rule across both routes, which would leave the floor
+#                     doing nothing while the FDR bar did all the work; and a floor that rises to each pair's
+#                     own resolution, which would stop two runs being comparable.
 DEFAULTS = {
     "xc_fdr": 0.05,            # FDR below which a difference is called
     "xc_min_delta": 1.0,       # and the smallest difference in scaled effect worth reporting
@@ -105,6 +108,9 @@ DEFAULTS = {
 
 MEDIAN_SE = float(np.sqrt(np.pi / 2.0))     # SE of a median against a mean's, for normal data
 POWER_Z = 2.80                              # 80% power, two-sided 5%, for the nominal statement
+# Confirmed 2026-11-24: refuse rather than warn. The bundled leukaemia table carries 17 core-essential and 19
+# non-essential genes, and at that size the scale's own error is larger than any difference the test could find,
+# so a table of numbers would be worse than none. The refusal names the counts and points at the paired route.
 MIN_REFERENCE = 30                          # reference genes each screen needs before its scale is load-bearing
 
 _SPACER = re.compile(r"^[ACGT]{19,25}$")
@@ -419,7 +425,9 @@ def cross_compare(a: dict, b: dict, thresholds: dict | None = None, mapping: dic
     t_raw = np.divide(delta, se, out=np.zeros_like(delta), where=se > 0)
 
     # Efron's empirical null: centre on the bulk, widen by its MAD — and only ever widen, so the calibration
-    # cannot make the test more liberal than the nominal model.
+    # cannot make the test more liberal than the nominal model. Confirmed 2026-11-24: the floor at 1 stays even
+    # where the data say the test is over-cautious (on two tables of one HAP1 screen the statistic scatters at
+    # 0.09 where 1 is expected). That is reported in words instead; narrowing is how a tool invents hits.
     centre = float(np.median(t_raw))
     mad = float(np.median(np.abs(t_raw - centre)))
     spread = max(1.0, mad / 0.6744897501960817) if mad > 0 else 1.0

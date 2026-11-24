@@ -146,9 +146,13 @@ from one cell line at one timepoint. Everything below follows from taking that s
   20-mers — no ID in common). Pearson 0.996 and **nothing called different** out of 17,620 genes, with the
   shared-library warning raised.
 - Exports to CSV, a sheet in the Excel workbook, and a section in the PDF report.
-- **Defaults, awaiting confirmation**: FDR 0.05, smallest reported change **1.0** (twice the within-project
-  figure, because a smaller cross-library difference is inside the systematic error between libraries), at least
-  3 guides in each library, a dependency at a scaled effect of −0.5 or below.
+- **Confirmed defaults** (24 November 2026): FDR 0.05, smallest reported change **1.0** (twice the
+  within-project figure, because a smaller cross-library difference is inside the systematic error between
+  libraries, and below what four guides a side can resolve), at least 3 guides in each library, a dependency at
+  a scaled effect of −0.5 or below. A screen with fewer than 30 reference genes of either kind is **refused**
+  rather than warned about, and the empirical null may only ever be **widened, never narrowed** — on two tables
+  of one HAP1 screen the statistic scatters at 0.09 where 1 is expected, and the app says so in words rather
+  than tightening the test.
 
 Not built: merging three or more projects, and comparing across species.
 
